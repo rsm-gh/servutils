@@ -106,7 +106,7 @@ Compressing static files:
                 if verbose:
                     print(" {}".format(file_path))
 
-                    #
+    #
     # Compressing the files
     #
 
@@ -161,7 +161,7 @@ Compressing static files:
                     include_path = __path_from_path(line, CompressConstants._include_js)
 
                     with open(include_path, 'r') as f:
-                        data = f.read()
+                        data = f"/* {CompressConstants._include_js}{include_path} */\n" + f.read()
 
                     if minify:
                         compressed_data = jsmin(data)
@@ -181,14 +181,12 @@ Compressing static files:
                         for c_line in compressed_data.split("\n"):
                             print("\t" + c_line[:50])
 
-
-
                 elif line.startswith(CompressConstants._include_css):
 
                     include_path = __path_from_path(line, CompressConstants._include_css)
 
                     with open(include_path, 'r') as f:
-                        data = f.read()
+                        data = f"/* {CompressConstants._include_css}{include_path} */\n" + f.read()
 
                     if minify:
                         compressed_data = cssmin(data)
@@ -211,8 +209,6 @@ Compressing static files:
 
                     for read_line in read_lines:
                         compressed_lines.append(read_line)
-
-
 
                 else:
                     compressed_lines.append(line)
