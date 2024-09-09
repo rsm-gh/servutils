@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 #
-#  Copyright (C) 2022-2023 Rafael Senties Martinelli. All Rights Reserved.
+#  Copyright (C) 2022-2024 Rafael Senties Martinelli. All Rights Reserved.
 #
 
 from collections import OrderedDict
@@ -14,7 +14,7 @@ class ReduceData:
         self.errors = []
         self.constants = OrderedDict()
         self.functions = OrderedDict()
-        self.clases = OrderedDict()
+        self.classes = OrderedDict()
 
     def add_constant(self, name, encode):
 
@@ -34,8 +34,8 @@ class ReduceData:
 
     def add_class(self, name):
 
-        if name not in self.clases.keys():
-            self.clases[name] = ReduceClass(name)
+        if name not in self.classes.keys():
+            self.classes[name] = ReduceClass(name)
 
         else:
             self.add_error("Class already declared " + name)
@@ -105,7 +105,7 @@ class ReduceData:
 
         try:
             constant = self.constants[name]
-        except Exception:
+        except KeyError:
             self.add_error("constant not found: " + name)
             return False, None
 
@@ -126,7 +126,7 @@ class ReduceData:
 
         try:
             method = class_data.methods[method_name]
-        except Exception:
+        except KeyError:
             self.add_error("get_method_args method not found: " + name + "." + method_name)
             return {}
 
@@ -155,7 +155,7 @@ class ReduceData:
 
         try:
             method = class_data.methods[method_name]
-        except Exception:
+        except KeyError:
             self.add_error("get_method_vars method not found: " + name + "." + method_name)
             return {}
 
@@ -184,7 +184,7 @@ class ReduceData:
 
         try:
             method = class_data.methods[method_name]
-        except Exception:
+        except KeyError:
             self.add_error("get_method_constants method not found: " + name + "." + method_name)
             return {}
 
@@ -213,7 +213,7 @@ class ReduceData:
 
         try:
             method = class_data.methods[method_name]
-        except Exception:
+        except KeyError:
             self.add_error("get_method_lets method not found: " + name + "." + method_name)
             return {}
 
@@ -223,7 +223,7 @@ class ReduceData:
 
         try:
             function = self.functions[function_name]
-        except Exception:
+        except KeyError:
             self.add_error("function not found: " + function_name)
             return
 
@@ -236,7 +236,7 @@ class ReduceData:
 
         try:
             function = self.functions[function_name]
-        except Exception:
+        except KeyError:
             self.add_error("function not found: " + function_name)
             return {}
 
@@ -246,7 +246,7 @@ class ReduceData:
 
         try:
             function = self.functions[function_name]
-        except Exception:
+        except KeyError:
             self.add_error("function not found: " + function_name)
             return
 
@@ -262,7 +262,7 @@ class ReduceData:
 
         try:
             function = self.functions[function_name]
-        except Exception:
+        except KeyError:
             self.add_error("function not found: " + function_name)
             return {}
 
@@ -272,7 +272,7 @@ class ReduceData:
 
         try:
             function = self.functions[function_name]
-        except Exception:
+        except KeyError:
             self.add_error("function not found: " + function_name)
             return
 
@@ -288,7 +288,7 @@ class ReduceData:
 
         try:
             function = self.functions[function_name]
-        except Exception:
+        except KeyError:
             self.add_error("function not found: " + function_name)
             return {}
 
@@ -298,7 +298,7 @@ class ReduceData:
 
         try:
             function = self.functions[function_name]
-        except Exception:
+        except KeyError:
             self.add_error("function not found: " + function_name)
             return
 
@@ -314,7 +314,7 @@ class ReduceData:
 
         try:
             function = self.functions[function_name]
-        except Exception:
+        except KeyError:
             self.add_error("function not found: " + function_name)
             return {}
 
@@ -323,8 +323,8 @@ class ReduceData:
     def __get_class(self, name):
 
         try:
-            class_data = self.clases[name]
-        except Exception:
+            class_data = self.classes[name]
+        except KeyError:
             self.add_error("Class not found: " + name)
             return None
 
@@ -354,9 +354,9 @@ class ReduceData:
             for value in self.functions.values():
                 string_data += str(value) + "\n"
 
-        if len(self.clases.keys()) > 0:
+        if len(self.classes.keys()) > 0:
             string_data += "\n"
-            for value in self.clases.values():
+            for value in self.classes.values():
                 string_data += str(value) + "\n"
 
         return string_data
@@ -427,7 +427,7 @@ class ReduceClass:
 
         try:
             return self.methods[method_name].encode
-        except Exception:
+        except KeyError:
             return None
 
     def add_method_arg(self, method_name, arg_name):
