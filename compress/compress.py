@@ -56,21 +56,21 @@ def compress_directory(static_dir: str,
                        dont_compress_paths: None | list[str],
                        minify: bool = True,
                        reduce: bool = True,
-                       git_versioning: bool = True,
+                       git_versioning: bool = False,
                        md5_versioning: bool = True,  # Overrides GIT versioning
                        verbose: bool = True):
     print(f"""
 Compressing static files: 
-    static_dir={static_dir}
-    templates_dir={templates_dir}
-    integrity_dir={integrity_dir}
-    integrity_key_removal={integrity_key_removal}
-    include_strings={ignored_include_strings}
     minify={minify}
     reduce={reduce}
     git_versioning={git_versioning}
     md5_versioning={md5_versioning}
     verbose={verbose}
+    ignored_include_strings={ignored_include_strings}
+    static_dir={static_dir}
+    templates_dir={templates_dir}
+    integrity_dir={integrity_dir}
+    integrity_key_removal={integrity_key_removal}
 """)
 
     integrity_dict = {}
