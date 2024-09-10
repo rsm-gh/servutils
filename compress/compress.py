@@ -8,6 +8,7 @@ import re
 import os
 import sys
 import subprocess
+from typing import Literal
 from base64 import b64encode
 from datetime import datetime
 from hashlib import sha384, md5
@@ -26,26 +27,25 @@ class CompressConstants:
     _reduce_public_js_except = "reducePublicJSExcept:"
     _integrity_template = """#!/usr/bin/python3
 
-# this file is dynamically generated, do not modify it by hand.
+# This file is dynamically generated, DO NOT MODIFY IT by hand.
 
 class StaticFile:
-    def __init__(self, file_sha384, static):
-        self.integrity = "sha384-"+file_sha384
-        self.static = static
+    def __init__(self, file_sha384: str , static_path: str) -> None:
+        # The attributes can not be protected, or django template will not be able to read them.
+        self.sha384 = file_sha384
+        self.integrity = "sha384-" + file_sha384
+        self.static = static_path
 
-    def __str__(self):
-        return "[{{}},{{}}]".format(self.static, self.integrity)
-
-_GIT_VERSIONING = {}
-
+_GIT_SHORT_HASH = {}
 _INTEGRITY_DICT = {}
 """
 
 class StaticFile:
-    def __init__(self, file_sha384, static_f):
+    def __init__(self, file_sha384: str , static_path: str) -> None:
+        # The attributes can not be protected, or django template will not be able to read them.
         self.sha384 = file_sha384
         self.integrity = "sha384-" + file_sha384
-        self.static = static_f
+        self.static = static_path
 
 
 def compress_directory(static_dir: str,
@@ -56,15 +56,30 @@ def compress_directory(static_dir: str,
                        dont_compress_paths: None | list[str],
                        minify: bool = True,
                        reduce: bool = True,
-                       git_versioning: bool = False,
-                       md5_versioning: bool = True,  # Overrides GIT versioning
+                       versioning: None | Literal["md5", "git"] = "md5",
                        verbose: bool = True):
+    """
+        versioning:
+            In order to always update the JS & CSS, it is important to add a version
+            system in their file name. That forces the browser to reload the content
+            in case of changes.
+
+            md5: will use the md5 of the file content as file name. This is the best
+                 options since it will only force a reload when the content changes.
+
+            git: will include the short hash in the file name. The  problem  with
+                 this option, is that any commit, will force the reload of ALL the
+                 JS & CSS files.
+
+            None: will use the original file name.
+    """
+
+
     print(f"""
 Compressing static files: 
     minify={minify}
     reduce={reduce}
-    git_versioning={git_versioning}
-    md5_versioning={md5_versioning}
+    versioning={versioning}
     verbose={verbose}
     ignored_include_strings={ignored_include_strings}
     static_dir={static_dir}
@@ -73,14 +88,13 @@ Compressing static files:
     integrity_key_removal={integrity_key_removal}
 """)
 
+    if versioning not in (None, "md5", "git"):
+        raise ValueError("Error: the only values that can be accepted for versioning are: None, 'md5' or 'git'.")
+
     integrity_dict = {}
     integrity_file = os.path.join(integrity_dir, "integrity.py")
-    if md5_versioning:
-        versioning_value = None
-    elif git_versioning:
-        versioning_value = __get_git_revision_short_hash()
-    else:
-        versioning_value = None
+
+    git_short_hash = __get_git_revision_short_hash()
 
     if ignored_include_strings is None:
         ignored_include_strings = []
@@ -221,7 +235,7 @@ Compressing static files:
 
             compressed_file = file_path.rsplit(".comp", 1)[0]
 
-            if md5_versioning:
+            if versioning == "md5":
                 file_name = os.path.basename(compressed_file)
 
                 if "." not in file_name:
@@ -233,11 +247,12 @@ Compressing static files:
                 md5_creator = md5()
                 md5_creator.update(file_data.encode())
 
-                system_file_name = "{}/{}.min.{}".format(os.path.dirname(compressed_file), md5_creator.hexdigest(),
-                                                         extension)
+                system_file_name = "{}/{}.min.{}".format(os.path.dirname(compressed_file),
+                                                            md5_creator.hexdigest(),
+                                                            extension)
 
-            elif git_versioning:
-                system_file_name = compressed_file.replace(".min.", ".{}.min.".format(versioning_value))
+            elif versioning == "git":
+                system_file_name = compressed_file.replace(".min.", ".{}.min.".format(git_short_hash))
 
             else:
                 system_file_name = compressed_file
@@ -315,7 +330,7 @@ Compressing static files:
     # Creating HARD STATIC pages
     #
 
-    if git_versioning:
+    if versioning == "git":
 
         if verbose:
             print("\n************ Static Files ************")
@@ -332,7 +347,7 @@ Compressing static files:
                     with open(file_path, "r") as f:
                         template = f.read()
 
-                    template = template.replace("{{git_versioning}}", str(versioning_value))
+                    template = template.replace("{{git_versioning}}", git_short_hash)
                     template = template.replace("<!DOCTYPE html>",
                                                 "<!DOCTYPE html>\n\n<!-- File dynamically generated -->\n")
 
@@ -351,22 +366,15 @@ Compressing static files:
     #
     # Create the integrity file
     #
-
-    if md5_versioning:
-        data = CompressConstants._integrity_template.format("None", "{}")
-    elif git_versioning:
-        value = "'{}'".format(versioning_value)
-        data = CompressConstants._integrity_template.format(value, "{}")
-    else:
-        data = CompressConstants._integrity_template.format("None", "{}")
-
+    integrity_data = ""
     for key in sorted(integrity_dict.keys()):
         value = integrity_dict[key]
+        integrity_data += f"    '{key}':\n        StaticFile('{value.sha384}',\n                   '{value.static}'),\n"
+    integrity_data = "{\n"+integrity_data+"}"
 
-        data += "_INTEGRITY_DICT['{}']=StaticFile('{}','{}')\n".format(key, value.sha384, value.static)
-
+    integrity_template = CompressConstants._integrity_template.format(f"'{git_short_hash}'", integrity_data)
     with open(integrity_file, "w") as f:
-        f.write(data)
+        f.write(integrity_template)
 
     sys.path.insert(2, integrity_dir)
     from integrity import _INTEGRITY_DICT  # test of the file
@@ -380,11 +388,9 @@ Compressing static files:
         print("**************************************\n")
 
     print()
-    if git_versioning and verbose:
-        print(" Git Hash:\t{}".format(versioning_value))
-
     if verbose:
-        print(" Integrity.py:\t{} values".format(len(_INTEGRITY_DICT.values())))
+        print(" _GIT_SHORT_HASH:\t{}".format(git_short_hash))
+        print(" _INTEGRITY_DICT:\t{} values".format(len(_INTEGRITY_DICT.values())))
 
     print()
     print()
@@ -486,4 +492,5 @@ if __name__ == "__main__":
                        ignored_include_strings=[".git"],
                        dont_compress_paths=["external/"],
                        minify=False,
-                       reduce=True)
+                       reduce=True,
+                       versioning=None)
