@@ -82,6 +82,7 @@ Compressing static files:
     versioning={versioning}
     verbose={verbose}
     exclude_paths={exclude_paths}
+    dont_compress_paths={dont_compress_paths}
     static_dir={static_dir}
     templates_dir={templates_dir}
     integrity_dir={integrity_dir}
