@@ -52,7 +52,7 @@ def compress_directory(static_dir: str,
                        templates_dir: str,
                        integrity_dir: str,
                        integrity_key_removal: str,
-                       ignored_include_strings: None | list[str],
+                       exclude_paths: None | list[str],
                        dont_compress_paths: None | list[str],
                        minify: bool = True,
                        reduce: bool = True,
@@ -81,7 +81,7 @@ Compressing static files:
     reduce={reduce}
     versioning={versioning}
     verbose={verbose}
-    ignored_include_strings={ignored_include_strings}
+    exclude_paths={exclude_paths}
     static_dir={static_dir}
     templates_dir={templates_dir}
     integrity_dir={integrity_dir}
@@ -91,17 +91,151 @@ Compressing static files:
     if versioning not in (None, "md5", "git"):
         raise ValueError("Error: the only values that can be accepted for versioning are: None, 'md5' or 'git'.")
 
-    integrity_dict = {}
     integrity_file = os.path.join(integrity_dir, "integrity.py")
 
     git_short_hash = __get_git_revision_short_hash()
 
-    if ignored_include_strings is None:
-        ignored_include_strings = []
+    if exclude_paths is None:
+        exclude_paths = []
+
+    ignore_paths = exclude_paths + dont_compress_paths
 
     #
-    # Removing old files
+    # Delete old files
     #
+    __remove_old_files(static_dir, verbose, ignore_paths)
+
+    #
+    # Compressing the files
+    #
+    integrity_dict = __compress_files(static_dir=static_dir,
+                                     git_short_hash=git_short_hash,
+                                     integrity_key_removal=integrity_key_removal,
+                                     verbose=verbose,
+                                     minify=minify,
+                                     reduce=reduce,
+                                     versioning=versioning,
+                                     ignore_paths=ignore_paths)
+
+    #
+    # Excluded files
+    #
+    integrity_dict = __add_excluded_files(static_dir=static_dir,
+                                            dont_compress_paths=dont_compress_paths,
+                                            integrity_key_removal=integrity_key_removal,
+                                            verbose=verbose,
+                                            integrity_dict=integrity_dict)
+
+
+    #
+    # Creating HARD STATIC pages
+    #
+    __create_static_pages(templates_dir=templates_dir,
+                          git_short_hash=git_short_hash,
+                          dont_compress_paths=dont_compress_paths,
+                          verbose=verbose,
+                          integrity_dict=integrity_dict)
+
+
+    #
+    # Create the integrity file
+    #
+    file_dict = __create_integrity_file(integrity_file=integrity_file,
+                                        git_short_hash=git_short_hash,
+                                        verbose=verbose,
+                                        integrity_dict=integrity_dict)
+
+def __get_git_revision_short_hash():
+    return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
+
+def __path_from_path(line, tag):
+    return line.split(tag, 1)[1].strip()
+
+def __hash_file(system_file_name: str,
+                compressed_file: str,
+                integrity_key_removal: str,
+                dictionary: {},
+                verbose:bool):
+    with open(system_file_name, 'rb') as f:
+        file_sha384 = b64encode(sha384(f.read()).digest()).decode("utf-8")
+
+    integrity_key = compressed_file.replace(integrity_key_removal, "", 1).replace("/", "_").replace("-","_").replace(".", "_").lower()
+
+    static_f = "/static/" + system_file_name.split("static/")[1]
+
+    dictionary[integrity_key] = StaticFile(file_sha384, static_f)
+
+    if verbose:
+        print("\tkey:\t\t" + integrity_key)
+        print("\tstatic:\t\t" + static_f)
+        print("\tsha384:\t\t" + file_sha384)
+        print()
+
+
+def __remove_comments(text):
+    #
+    # Remove JS comments /* */
+    #
+
+    text_items = []
+
+    inside_comment = False
+    for char in re.split(r'(\s+)', text):
+
+        if char.startswith("/*"):
+            inside_comment = True
+
+        elif char.endswith("*/"):
+            inside_comment = False
+
+        elif not inside_comment:
+            text_items.append(char)
+
+    new_text = "".join(item for item in text_items)
+
+    #
+    # Remove JS comments starting with //
+    # But do not remove strings:  'https://'
+    #
+    comment_chars = ("'", '"')
+
+    text_items = []
+    for line in new_text.split("\n"):
+
+        if "//" in line:
+
+            keep_items = []
+            comment_char = None
+
+            for splitted_char in re.split(r'([\s\'\"])', line):
+
+                if splitted_char in comment_chars and comment_char is None:
+                    comment_char = splitted_char
+                    keep_items.append(splitted_char)
+
+                elif splitted_char == comment_char:
+                    comment_char = None
+                    keep_items.append(splitted_char)
+
+                elif "//" in splitted_char and comment_char is None:
+                    splitted_char = splitted_char.split("//")[0]
+                    keep_items.append(splitted_char)
+                    break
+
+                else:
+                    keep_items.append(splitted_char)
+
+            line = "".join(item for item in keep_items).strip()
+
+        text_items.append(line)
+
+    new_text = "\n".join(item for item in text_items)
+
+    return new_text
+
+def __remove_old_files(static_dir: str,
+                       verbose:bool,
+                       ignore_paths: list[str]) -> None:
 
     if verbose:
         print("\n************ Deleting ************")
@@ -111,18 +245,24 @@ Compressing static files:
         for filename in filenames:
 
             file_path = os.path.abspath(os.path.join(dir_path, filename))
-            if not any(include_string in file_path.lower() for include_string in
-                       ignored_include_strings + dont_compress_paths) and (file_path.endswith(".min.js") or
-                                                                           file_path.endswith(".min.dict") or
-                                                                           file_path.endswith(".min.css")):
+            if not any(include_string in file_path.lower() for include_string in ignore_paths) and \
+                    (file_path.endswith(".min.js") or file_path.endswith(".min.dict") or file_path.endswith(".min.css")):
                 os.remove(file_path)
 
                 if verbose:
                     print(" {}".format(file_path))
 
-    #
-    # Compressing the files
-    #
+
+def __compress_files(static_dir: str,
+                     git_short_hash: str,
+                     integrity_key_removal: str,
+                     verbose: bool,
+                     minify: bool,
+                     reduce: bool,
+                     versioning: None | str,
+                     ignore_paths: list[str]) -> dict:
+
+    integrity_dict = {}
 
     if verbose:
         print("\n************ Compressing ************")
@@ -133,8 +273,7 @@ Compressing static files:
 
             file_path = os.path.abspath(os.path.join(dir_path, filename))
 
-            if any(include_string in file_path.lower() for include_string in
-                   ignored_include_strings + dont_compress_paths) or not file_path.endswith(".comp"):
+            if any(include_string in file_path.lower() for include_string in ignore_paths) or not file_path.endswith(".comp"):
                 continue
 
             if verbose:
@@ -301,9 +440,14 @@ Compressing static files:
                         dictionary=integrity_dict,
                         verbose=verbose)
 
-    #
-    # Excluded files
-    #
+    return integrity_dict
+
+
+def __add_excluded_files(static_dir: str,
+                         integrity_key_removal: str,
+                         verbose: bool,
+                         dont_compress_paths: list[str],
+                         integrity_dict:dict) -> dict:
 
     if verbose:
         print("\n************ Excluded from compression ************")
@@ -326,46 +470,50 @@ Compressing static files:
                                 dictionary=integrity_dict,
                                 verbose=verbose)
 
-    #
-    # Creating HARD STATIC pages
-    #
+    return integrity_dict # this may not be necessary, but it will clarify the output.
 
-    if versioning == "git":
+def __create_static_pages(templates_dir: str,
+                          git_short_hash: str,
+                          dont_compress_paths: list[str],
+                          verbose: bool,
+                          integrity_dict: dict) -> None:
 
-        if verbose:
-            print("\n************ Static Files ************")
-            print("**************************************\n")
+    if verbose:
+        print("\n************ Static Files ************")
+        print("**************************************\n")
 
-        for dir_path, _, filenames in os.walk(templates_dir):
-            for filename in filenames:
+    for dir_path, _, filenames in os.walk(templates_dir):
+        for filename in filenames:
 
-                file_path = os.path.abspath(os.path.join(dir_path, filename))
+            file_path = os.path.abspath(os.path.join(dir_path, filename))
 
-                if not any(include_string in file_path.lower() for include_string in
-                           ignored_include_strings + dont_compress_paths) and file_path.endswith(".comp.html"):
+            if any(include_string in file_path.lower() for include_string in dont_compress_paths) or not file_path.endswith(".comp.html"):
+                continue
 
-                    with open(file_path, "r") as f:
-                        template = f.read()
+            with open(file_path, "r") as f:
+                template = f.read()
 
-                    template = template.replace("{{git_versioning}}", git_short_hash)
-                    template = template.replace("<!DOCTYPE html>",
-                                                "<!DOCTYPE html>\n\n<!-- File dynamically generated -->\n")
+            template = template.replace("{{git_versioning}}", git_short_hash)
+            template = template.replace("<!DOCTYPE html>",
+                                        "<!DOCTYPE html>\n\n<!-- File dynamically generated -->\n")
 
-                    for key, value in integrity_dict.items():
-                        template = template.replace("{{" + key + ".integrity}}", value.integrity)
-                        template = template.replace("{{" + key + ".static}}", value.static)
+            for key, value in integrity_dict.items():
+                template = template.replace("{{" + key + ".integrity}}", value.integrity)
+                template = template.replace("{{" + key + ".static}}", value.static)
 
-                    system_file_name = file_path.replace(".comp.html", ".html")
+            system_file_name = file_path.replace(".comp.html", ".html")
 
-                    with open(system_file_name, "w") as f:
-                        f.write(template)
+            with open(system_file_name, "w") as f:
+                f.write(template)
 
-                    if verbose:
-                        print(" " + system_file_name)
+            if verbose:
+                print(" " + system_file_name)
 
-    #
-    # Create the integrity file
-    #
+
+def __create_integrity_file(integrity_file: str,
+                            git_short_hash: str,
+                            verbose: bool,
+                            integrity_dict:dict) -> dict:
     integrity_data = ""
     for key in sorted(integrity_dict.keys()):
         value = integrity_dict[key]
@@ -376,112 +524,25 @@ Compressing static files:
     with open(integrity_file, "w") as f:
         f.write(integrity_template)
 
-    sys.path.insert(2, integrity_dir)
-    from integrity import _INTEGRITY_DICT  # test of the file
+    #
+    # Test the file
+    #
+    sys.path.insert(2, os.path.dirname(integrity_file))
+    from integrity import _INTEGRITY_DICT, _GIT_SHORT_HASH
 
     #
     # Git Revision
     #
-
     if verbose:
-        print("\n************ Extra Data ************")
+        print("\n************ integrity.py ************")
         print("**************************************\n")
 
-    print()
     if verbose:
-        print(" _GIT_SHORT_HASH:\t{}".format(git_short_hash))
+        print(" _GIT_SHORT_HASH:\t{}".format(_GIT_SHORT_HASH))
         print(" _INTEGRITY_DICT:\t{} values".format(len(_INTEGRITY_DICT.values())))
 
     print()
     print()
-
-def __get_git_revision_short_hash():
-    return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
-
-def __path_from_path(line, tag):
-    return line.split(tag, 1)[1].strip()
-
-def __hash_file(system_file_name: str,
-                compressed_file: str,
-                integrity_key_removal: str,
-                dictionary: {},
-                verbose:bool):
-    with open(system_file_name, 'rb') as f:
-        file_sha384 = b64encode(sha384(f.read()).digest()).decode("utf-8")
-
-    integrity_key = compressed_file.replace(integrity_key_removal, "", 1).replace("/", "_").replace("-","_").replace(".", "_").lower()
-
-    static_f = "/static/" + system_file_name.split("static/")[1]
-
-    dictionary[integrity_key] = StaticFile(file_sha384, static_f)
-
-    if verbose:
-        print("\tkey:\t\t" + integrity_key)
-        print("\tstatic:\t\t" + static_f)
-        print("\tsha384:\t\t" + file_sha384)
-        print()
-
-
-def __remove_comments(text):
-    #
-    # Remove JS comments /* */
-    #
-
-    text_items = []
-
-    inside_comment = False
-    for char in re.split(r'(\s+)', text):
-
-        if char.startswith("/*"):
-            inside_comment = True
-
-        elif char.endswith("*/"):
-            inside_comment = False
-
-        elif not inside_comment:
-            text_items.append(char)
-
-    new_text = "".join(item for item in text_items)
-
-    #
-    # Remove JS comments starting with //
-    # But do not remove strings:  'https://'
-    #
-    comment_chars = ("'", '"')
-
-    text_items = []
-    for line in new_text.split("\n"):
-
-        if "//" in line:
-
-            keep_items = []
-            comment_char = None
-
-            for splitted_char in re.split(r'([\s\'\"])', line):
-
-                if splitted_char in comment_chars and comment_char is None:
-                    comment_char = splitted_char
-                    keep_items.append(splitted_char)
-
-                elif splitted_char == comment_char:
-                    comment_char = None
-                    keep_items.append(splitted_char)
-
-                elif "//" in splitted_char and comment_char is None:
-                    splitted_char = splitted_char.split("//")[0]
-                    keep_items.append(splitted_char)
-                    break
-
-                else:
-                    keep_items.append(splitted_char)
-
-            line = "".join(item for item in keep_items).strip()
-
-        text_items.append(line)
-
-    new_text = "\n".join(item for item in text_items)
-
-    return new_text
 
 
 if __name__ == "__main__":
@@ -489,7 +550,7 @@ if __name__ == "__main__":
                        templates_dir="/home/cadweb/cadweb/core/templates/",
                        integrity_dir="/home/cadweb/cadweb/core/django/cadweb/",
                        integrity_key_removal="/home/cadweb/cadweb/core/static/",
-                       ignored_include_strings=[".git"],
+                       exclude_paths=[".git/"],
                        dont_compress_paths=["external/"],
                        minify=False,
                        reduce=True,
