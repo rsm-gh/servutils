@@ -1,7 +1,7 @@
+Copyright (C) Rafael Senties Martinelli. All Rights Reserved.
 
-> /!\ If you don't have a written authorization to visualize or use this content, you must close and erase it. /!\
+**A written authorization is necessary if visualizing or using this software.**
 
-Installation:
 
 ```
 cd /usr/lib/python3/dist-packages/
