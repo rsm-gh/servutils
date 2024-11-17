@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 #
-#  Copyright (C) 2022-2024 Rafael Senties Martinelli. All Rights Reserved.
+#  Copyright (C) Rafael Senties Martinelli. All Rights Reserved.
 #
 
 """
