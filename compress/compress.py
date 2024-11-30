@@ -12,7 +12,6 @@ from typing import Literal
 from base64 import b64encode
 from datetime import datetime
 from hashlib import sha384, md5
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from compress.external.jsmin import jsmin
@@ -20,10 +19,12 @@ from compress.external.cssmin import cssmin
 from compress.reduce_js import reduce_js
 
 class CompressConstants:
+    _file_extension = ".comp"
     _info_tag = "@GENERATION_INFO"  # to be avoided if using the HTML5 integrity value (because of the datetime-hour)
     _include_js = "includeJS:"
     _include_css = "includeCSS:"
     _include = "include:"
+    _static_path = "STATIC_PATH/" # the slash is important
     _reduce_public_js_except = "reducePublicJSExcept:"
     _integrity_template = """#!/usr/bin/python3
 
@@ -141,16 +142,28 @@ Compressing static files:
     #
     # Create the integrity file
     #
-    file_dict = __create_integrity_file(integrity_file=integrity_file,
-                                        git_short_hash=git_short_hash,
-                                        verbose=verbose,
-                                        integrity_dict=integrity_dict)
+    __create_integrity_file(integrity_file=integrity_file,
+                            git_short_hash=git_short_hash,
+                            verbose=verbose,
+                            integrity_dict=integrity_dict)
 
 def __get_git_revision_short_hash():
     return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
 
-def __path_from_path(line, tag):
-    return line.split(tag, 1)[1].strip()
+def __path_from_line(line, tag, static_dir):
+
+    path = line.split(tag, 1)[1].strip()
+
+    if path.startswith(CompressConstants._static_path):
+        complement = path.split(CompressConstants._static_path, 1)[1]
+        path = os.path.join(static_dir, complement)
+
+    return path
+
+def __test_include_path(comp_path, include_path):
+    if not os.path.exists(include_path):
+        print(f"\nCritical Error: Non-Existent path '{include_path}' defined in '{comp_path}'")
+        sys.exit(1)
 
 def __hash_file(system_file_name: str,
                 compressed_file: str,
@@ -272,15 +285,15 @@ def __compress_files(static_dir: str,
     for dir_path, _, filenames in os.walk(static_dir):
         for filename in filenames:
 
-            file_path = os.path.abspath(os.path.join(dir_path, filename))
+            comp_path = os.path.abspath(os.path.join(dir_path, filename))
 
-            if any(include_string in file_path.lower() for include_string in ignore_paths) or not file_path.endswith(".comp"):
+            if any(include_string in comp_path.lower() for include_string in ignore_paths) or not comp_path.endswith(CompressConstants._file_extension):
                 continue
 
             if verbose:
-                print(" " + file_path)
+                print(" " + comp_path)
 
-            with open(file_path, "r") as f:
+            with open(comp_path, "r") as f:
                 template_lines = f.readlines()
 
             compressed_lines = []
@@ -312,7 +325,8 @@ def __compress_files(static_dir: str,
 
                 elif line.startswith(CompressConstants._include_js):
 
-                    include_path = __path_from_path(line, CompressConstants._include_js)
+                    include_path = __path_from_line(line, CompressConstants._include_js, static_dir)
+                    __test_include_path(comp_path, include_path)
 
                     with open(include_path, 'r') as f:
                         data = f"/* {CompressConstants._include_js}{include_path} */\n" + f.read()
@@ -337,7 +351,8 @@ def __compress_files(static_dir: str,
 
                 elif line.startswith(CompressConstants._include_css):
 
-                    include_path = __path_from_path(line, CompressConstants._include_css)
+                    include_path = __path_from_line(line, CompressConstants._include_css, static_dir)
+                    __test_include_path(comp_path, include_path)
 
                     with open(include_path, 'r') as f:
                         data = f"/* {CompressConstants._include_css}{include_path} */\n" + f.read()
@@ -356,7 +371,8 @@ def __compress_files(static_dir: str,
 
                 elif line.startswith(CompressConstants._include):
 
-                    include_path = __path_from_path(line, CompressConstants._include)
+                    include_path = __path_from_line(line, CompressConstants._include, static_dir)
+                    __test_include_path(comp_path, include_path)
 
                     with open(include_path, 'r') as f:
                         read_lines = f.readlines()
@@ -373,14 +389,14 @@ def __compress_files(static_dir: str,
             # Rename the file
             #
 
-            compressed_file = file_path.rsplit(".comp", 1)[0]
+            compressed_file = comp_path.rsplit(CompressConstants._file_extension, 1)[0]
 
             if versioning == "md5":
                 file_name = os.path.basename(compressed_file)
 
                 if "." not in file_name:
                     raise ValueError(
-                        'Error, invalid filename: It must end with ".js.comp" or ".css.comp" not filename = ' + file_name)
+                        'Error, invalid filename: It must end with ".js{0}" or ".css{0}" not filename = '.format(CompressConstants._file_extension) + file_name)
 
                 extension = file_name.rsplit(".", 1)[1]
 
@@ -488,7 +504,7 @@ def __create_static_pages(templates_dir: str,
 
             file_path = os.path.abspath(os.path.join(dir_path, filename))
 
-            if any(include_string in file_path.lower() for include_string in dont_compress_paths) or not file_path.endswith(".comp.html"):
+            if any(include_string in file_path.lower() for include_string in dont_compress_paths) or not file_path.endswith(CompressConstants._file_extension+".html"):
                 continue
 
             with open(file_path, "r") as f:
@@ -502,7 +518,7 @@ def __create_static_pages(templates_dir: str,
                 template = template.replace("{{" + key + ".integrity}}", value.integrity)
                 template = template.replace("{{" + key + ".static}}", value.static)
 
-            system_file_name = file_path.replace(".comp.html", ".html")
+            system_file_name = file_path.replace(CompressConstants._file_extension+".html", ".html")
 
             with open(system_file_name, "w") as f:
                 f.write(template)
@@ -514,7 +530,7 @@ def __create_static_pages(templates_dir: str,
 def __create_integrity_file(integrity_file: str,
                             git_short_hash: str,
                             verbose: bool,
-                            integrity_dict:dict) -> dict:
+                            integrity_dict:dict) -> None:
     integrity_data = ""
     for key in sorted(integrity_dict.keys()):
         value = integrity_dict[key]
