@@ -51,7 +51,7 @@ class StaticFile:
 
 def compress_directory(static_dir: str,
                        templates_dir: str,
-                       integrity_dir: str,
+                       integrity_dir: None | str,
                        integrity_key_removal: str,
                        exclude_paths: None | list[str],
                        dont_compress_paths: None | list[str],
@@ -92,8 +92,6 @@ Compressing static files:
 
     if versioning not in (None, "md5", "git"):
         raise ValueError("Error: the only values that can be accepted for versioning are: None, 'md5' or 'git'.")
-
-    integrity_file = os.path.join(integrity_dir, "integrity.py")
 
     git_short_hash = __get_git_revision_short_hash()
 
@@ -142,10 +140,11 @@ Compressing static files:
     #
     # Create the integrity file
     #
-    __create_integrity_file(integrity_file=integrity_file,
-                            git_short_hash=git_short_hash,
-                            verbose=verbose,
-                            integrity_dict=integrity_dict)
+    if integrity_dir is not None:
+        __create_integrity_file(integrity_file=os.path.join(integrity_dir, "integrity.py"),
+                                git_short_hash=git_short_hash,
+                                verbose=verbose,
+                                integrity_dict=integrity_dict)
 
 def __get_git_revision_short_hash():
     return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
@@ -560,15 +559,3 @@ def __create_integrity_file(integrity_file: str,
 
     print()
     print()
-
-
-if __name__ == "__main__":
-    compress_directory(static_dir="/home/cadweb/cadweb/core/static/",
-                       templates_dir="/home/cadweb/cadweb/core/templates/",
-                       integrity_dir="/home/cadweb/cadweb/core/django/cadweb/",
-                       integrity_key_removal="/home/cadweb/cadweb/core/static/",
-                       exclude_paths=[".git/"],
-                       dont_compress_paths=["external/"],
-                       minify=False,
-                       reduce=True,
-                       versioning=None)
