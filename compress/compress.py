@@ -450,6 +450,7 @@ def __compress_files(static_dir: str,
         # Define the system file name (can be renamed later)
         #
         system_path = comp_path.rsplit(CompressConstants._file_extension, 1)[0]
+        integrity_key_path = system_path
 
         #
         # Reduce (encode) the data
@@ -489,7 +490,7 @@ def __compress_files(static_dir: str,
 
                 extension = file_name.rsplit(".", 1)[1]
 
-                simplified_hash = file_hash.replace("/", "_")
+                simplified_hash = file_hash.replace("/", "-")
                 new_system_path = f"{os.path.dirname(system_path)}/.{simplified_hash}.min.{extension}"
 
             else:
@@ -510,17 +511,12 @@ def __compress_files(static_dir: str,
         #
         # Add to the integrity dict
         #
-
         __add_to_integrity(system_path=system_path,
-                           file_hash=file_hash,
-                            compressed_file=system_path,
+                            file_hash=file_hash,
+                            compressed_file=integrity_key_path,
                             integrity_key_removal=integrity_key_removal,
                             dictionary=integrity_dict,
                             verbose=verbose)
-
-
-
-
 
     return integrity_dict
 
@@ -562,10 +558,10 @@ def __add_excluded_files(static_dir: str,
 
         __add_to_integrity(system_path=file_path,
                            file_hash=file_hash,
-                            compressed_file=file_path,
-                            integrity_key_removal=integrity_key_removal,
-                            dictionary=integrity_dict,
-                            verbose=verbose)
+                           compressed_file=file_path,
+                           integrity_key_removal=integrity_key_removal,
+                           dictionary=integrity_dict,
+                           verbose=verbose)
 
     return integrity_dict # this may not be necessary, but it will clarify the output.
 
