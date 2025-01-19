@@ -18,7 +18,7 @@ from compress.external.jsmin import jsmin
 from compress.external.cssmin import cssmin
 from compress.reduce_js import reduce_js
 
-__version__ = "25.01.19"
+__version__ = "25.01.19.1"
 
 class CompressConstants:
     _file_extension = ".comp"
