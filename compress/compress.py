@@ -18,6 +18,8 @@ from compress.external.jsmin import jsmin
 from compress.external.cssmin import cssmin
 from compress.reduce_js import reduce_js
 
+__version__ = "25.01.19"
+
 class CompressConstants:
     _file_extension = ".comp"
     _info_tag = "@GENERATION_INFO"  # to be avoided if using the HTML5 integrity value (because of the datetime-hour)
@@ -77,7 +79,7 @@ def compress_directory(static_dir: str,
 
 
     print(f"""
-Compressing static files: 
+Compressing static files (v{__version__}): 
     minify={minify}
     reduce={reduce}
     versioning={versioning}
@@ -281,180 +283,195 @@ def __compress_files(static_dir: str,
         print("\n************ Compressing ************")
         print("*************************************\n")
 
+
+    #
+    # Get the files and sort them
+    #
+    comp_paths = []
     for dir_path, _, filenames in os.walk(static_dir):
         for filename in filenames:
 
-            comp_path = os.path.abspath(os.path.join(dir_path, filename))
+            abs_path = os.path.abspath(os.path.join(dir_path, filename))
 
-            if any(include_string in comp_path.lower() for include_string in ignore_paths) or not comp_path.endswith(CompressConstants._file_extension):
+            if any(include_string in abs_path.lower() for include_string in ignore_paths) or not abs_path.endswith(
+                    CompressConstants._file_extension):
                 continue
 
-            if verbose:
-                print(" " + comp_path)
+            comp_paths.append(abs_path)
 
-            with open(comp_path, "r") as f:
-                template_lines = f.readlines()
+    comp_paths.sort()
 
-            compressed_lines = []
-            encode_dictionary = ""
+    #
+    # Process the comp paths
+    #
+    for comp_path in comp_paths:
 
-            reduce_public_js_except = []
-            reduce_public_js = False
+        if verbose:
+            print(" " + comp_path)
 
-            for line in template_lines:
+        with open(comp_path, "r") as f:
+            template_lines = f.readlines()
 
-                line = line.replace("\n", "")
+        compressed_lines = []
+        encode_dictionary = ""
 
-                if CompressConstants._info_tag in line:
-                    new_line = line.replace(CompressConstants._info_tag, "@Generated at: {}".format(datetime.now()))
-                    compressed_lines.append(new_line)
+        reduce_public_js_except = []
+        reduce_public_js = False
 
-                elif line.startswith(CompressConstants._reduce_public_js_except):
+        for line in template_lines:
 
-                    reduce_public_js = True
+            line = line.replace("\n", "")
 
-                    exclude_methods = line.split(CompressConstants._reduce_public_js_except, 1)[1]
+            if CompressConstants._info_tag in line:
+                new_line = line.replace(CompressConstants._info_tag, "@Generated at: {}".format(datetime.now()))
+                compressed_lines.append(new_line)
 
-                    for elem in exclude_methods.split(";"):
+            elif line.startswith(CompressConstants._reduce_public_js_except):
 
-                        elem = elem.strip()
+                reduce_public_js = True
 
-                        if elem != "":
-                            reduce_public_js_except.append(elem)
+                exclude_methods = line.split(CompressConstants._reduce_public_js_except, 1)[1]
 
-                elif line.startswith(CompressConstants._include_js):
+                for elem in exclude_methods.split(";"):
 
-                    include_path = __path_from_line(line, CompressConstants._include_js, static_dir)
-                    __test_include_path(comp_path, include_path)
+                    elem = elem.strip()
 
-                    with open(include_path, 'r') as f:
-                        data = f"/* {CompressConstants._include_js}{include_path} */\n" + f.read()
+                    if elem != "":
+                        reduce_public_js_except.append(elem)
 
-                    if minify:
-                        compressed_data = jsmin(data)
+            elif line.startswith(CompressConstants._include_js):
 
-                    elif reduce:
-                        compressed_data = __remove_comments(data)
-                    else:
-                        compressed_data = data
+                include_path = __path_from_line(line, CompressConstants._include_js, static_dir)
+                __test_include_path(comp_path, include_path)
 
-                    compressed_data = compressed_data.replace('"use strict";', "")
-                    compressed_data = compressed_data.replace("'use strict';", "")
-                    compressed_data = compressed_data.replace(';}', "}")
-                    compressed_lines.append(compressed_data)
+                with open(include_path, 'r') as f:
+                    data = f"/* {CompressConstants._include_js}{include_path} */\n" + f.read()
 
-                    if minify and len(compressed_data.split("\n")) > 1:
-                        print("[Info] multiple lines compressing", include_path)
-                        for c_line in compressed_data.split("\n"):
-                            print("\t" + c_line[:50])
+                if minify:
+                    compressed_data = jsmin(data)
 
-                elif line.startswith(CompressConstants._include_css):
-
-                    include_path = __path_from_line(line, CompressConstants._include_css, static_dir)
-                    __test_include_path(comp_path, include_path)
-
-                    with open(include_path, 'r') as f:
-                        data = f"/* {CompressConstants._include_css}{include_path} */\n" + f.read()
-
-                    if minify:
-                        compressed_data = cssmin(data)
-                    else:
-                        compressed_data = data
-
-                    # comp_css = cssmin(sys.stdin.read(), wrap=options.wrap)
-                    compressed_data = compressed_data.replace("+", " + ").replace("  ", " ")
-                    compressed_data = compressed_data.replace('opacity:0', 'opacity: 0')
-
-                    compressed_lines.append(compressed_data)
-
-
-                elif line.startswith(CompressConstants._include):
-
-                    include_path = __path_from_line(line, CompressConstants._include, static_dir)
-                    __test_include_path(comp_path, include_path)
-
-                    with open(include_path, 'r') as f:
-                        read_lines = f.readlines()
-
-                    for read_line in read_lines:
-                        compressed_lines.append(read_line)
-
+                elif reduce:
+                    compressed_data = __remove_comments(data)
                 else:
-                    compressed_lines.append(line)
+                    compressed_data = data
 
-            file_data = "\n".join(compressed_lines)
+                compressed_data = compressed_data.replace('"use strict";', "")
+                compressed_data = compressed_data.replace("'use strict';", "")
+                compressed_data = compressed_data.replace(';}', "}")
+                compressed_lines.append(compressed_data)
 
-            #
-            # Rename the file
-            #
+                if minify and len(compressed_data.split("\n")) > 1:
+                    print("[Info] multiple lines compressing", include_path)
+                    for c_line in compressed_data.split("\n"):
+                        print("\t" + c_line[:50])
 
-            compressed_file = comp_path.rsplit(CompressConstants._file_extension, 1)[0]
+            elif line.startswith(CompressConstants._include_css):
 
-            if versioning == "md5":
-                file_name = os.path.basename(compressed_file)
+                include_path = __path_from_line(line, CompressConstants._include_css, static_dir)
+                __test_include_path(comp_path, include_path)
 
-                if "." not in file_name:
-                    raise ValueError(
-                        'Error, invalid filename: It must end with ".js{0}" or ".css{0}" not filename = '.format(CompressConstants._file_extension) + file_name)
+                with open(include_path, 'r') as f:
+                    data = f"/* {CompressConstants._include_css}{include_path} */\n" + f.read()
 
-                extension = file_name.rsplit(".", 1)[1]
+                if minify:
+                    compressed_data = cssmin(data)
+                else:
+                    compressed_data = data
 
-                md5_creator = md5()
-                md5_creator.update(file_data.encode())
+                # comp_css = cssmin(sys.stdin.read(), wrap=options.wrap)
+                compressed_data = compressed_data.replace("+", " + ").replace("  ", " ")
+                compressed_data = compressed_data.replace('opacity:0', 'opacity: 0')
 
-                system_file_name = "{}/{}.min.{}".format(os.path.dirname(compressed_file),
-                                                            md5_creator.hexdigest(),
-                                                            extension)
+                compressed_lines.append(compressed_data)
 
-            elif versioning == "git":
-                system_file_name = compressed_file.replace(".min.", ".{}.min.".format(git_short_hash))
+
+            elif line.startswith(CompressConstants._include):
+
+                include_path = __path_from_line(line, CompressConstants._include, static_dir)
+                __test_include_path(comp_path, include_path)
+
+                with open(include_path, 'r') as f:
+                    read_lines = f.readlines()
+
+                for read_line in read_lines:
+                    compressed_lines.append(read_line)
 
             else:
-                system_file_name = compressed_file
+                compressed_lines.append(line)
 
-            #
-            # Improve the indentation
-            #
-            file_data = file_data.replace("\t", "    ")  # this will normalize the spaces and place them into the end?
-            while "    " in file_data:
-                file_data = file_data.replace("    ", "\t")
+        file_data = "\n".join(compressed_lines)
 
-            #
-            # Encode the data
-            #
+        #
+        # Rename the file
+        #
 
-            if reduce and system_file_name.endswith(".js"):
-                file_data, encode_dictionary = reduce_js(file_data,
-                                                         public=reduce_public_js,
-                                                         skip_items=reduce_public_js_except,
-                                                         verbose=verbose)
+        compressed_file = comp_path.rsplit(CompressConstants._file_extension, 1)[0]
 
-            #
-            # Write and Hide the compressed files
-            #
-            file_name = os.path.basename(system_file_name)
-            if not file_name.startswith("."):
-                system_file_name = system_file_name.replace("/{}".format(file_name), "/.{}".format(file_name))
+        if versioning == "md5":
+            file_name = os.path.basename(compressed_file)
 
-            with open(system_file_name, "w") as f:
-                f.write(file_data)
+            if "." not in file_name:
+                raise ValueError(
+                    'Error, invalid filename: It must end with ".js{0}" or ".css{0}" not filename = '.format(CompressConstants._file_extension) + file_name)
 
-            #
-            # Write the encode dictionary
-            #
-            if reduce and system_file_name.endswith(".js"):
-                with open(system_file_name.replace("min.js", "min.dict"), "w") as f:
-                    f.write(encode_dictionary)
+            extension = file_name.rsplit(".", 1)[1]
 
-            #
-            # HASH
-            #
+            md5_creator = md5()
+            md5_creator.update(file_data.encode())
 
-            __hash_file(system_file_name=system_file_name,
-                        compressed_file=compressed_file,
-                        integrity_key_removal=integrity_key_removal,
-                        dictionary=integrity_dict,
-                        verbose=verbose)
+            system_file_name = "{}/{}.min.{}".format(os.path.dirname(compressed_file),
+                                                        md5_creator.hexdigest(),
+                                                        extension)
+
+        elif versioning == "git":
+            system_file_name = compressed_file.replace(".min.", ".{}.min.".format(git_short_hash))
+
+        else:
+            system_file_name = compressed_file
+
+        #
+        # Improve the indentation
+        #
+        file_data = file_data.replace("\t", "    ")  # this will normalize the spaces and place them into the end?
+        while "    " in file_data:
+            file_data = file_data.replace("    ", "\t")
+
+        #
+        # Encode the data
+        #
+
+        if reduce and system_file_name.endswith(".js"):
+            file_data, encode_dictionary = reduce_js(file_data,
+                                                     public=reduce_public_js,
+                                                     skip_items=reduce_public_js_except,
+                                                     verbose=verbose)
+
+        #
+        # Write and Hide the compressed files
+        #
+        file_name = os.path.basename(system_file_name)
+        if not file_name.startswith("."):
+            system_file_name = system_file_name.replace("/{}".format(file_name), "/.{}".format(file_name))
+
+        with open(system_file_name, "w") as f:
+            f.write(file_data)
+
+        #
+        # Write the encode dictionary
+        #
+        if reduce and system_file_name.endswith(".js"):
+            with open(system_file_name.replace("min.js", "min.dict"), "w") as f:
+                f.write(encode_dictionary)
+
+        #
+        # HASH
+        #
+
+        __hash_file(system_file_name=system_file_name,
+                    compressed_file=compressed_file,
+                    integrity_key_removal=integrity_key_removal,
+                    dictionary=integrity_dict,
+                    verbose=verbose)
 
     return integrity_dict
 
@@ -469,22 +486,33 @@ def __add_excluded_files(static_dir: str,
         print("\n************ Excluded from compression ************")
         print("***************************************************\n")
 
+    #
+    # Get the file paths and sort them
+    #
+    file_paths = []
     for dir_path, _, filenames in os.walk(static_dir):
         for filename in filenames:
-
             file_path = os.path.abspath(os.path.join(dir_path, filename))
 
             if any(include_string in file_path.lower() for include_string in dont_compress_paths):
                 if file_path.endswith(".min.js") or file_path.endswith(".min.css"):
 
-                    if verbose:
-                        print(" " + file_path)
+                    file_paths.append(file_path)
 
-                    __hash_file(system_file_name=file_path,
-                                compressed_file=file_path,
-                                integrity_key_removal=integrity_key_removal,
-                                dictionary=integrity_dict,
-                                verbose=verbose)
+    file_paths.sort()
+
+    #
+    # Process the files
+    #
+    for file_path in file_paths:
+        if verbose:
+            print(" " + file_path)
+
+        __hash_file(system_file_name=file_path,
+                    compressed_file=file_path,
+                    integrity_key_removal=integrity_key_removal,
+                    dictionary=integrity_dict,
+                    verbose=verbose)
 
     return integrity_dict # this may not be necessary, but it will clarify the output.
 
