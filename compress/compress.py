@@ -300,9 +300,10 @@ def __add_to_integrity(system_path: str,
     static_f = "/static/" + system_path.split("static/")[1]
 
     if verbose:
-        print("\tkey:\t\t" + integrity_key)
-        print("\tstatic:\t\t" + static_f)
-        print("\tsha384:\t\t" + file_hash)
+        print(f"\tkey:\t\t{integrity_key}")
+        print(f"\tstatic:\t\t{static_f}")
+        print(f"\tsha384:\t\t{file_hash}")
+        print(f"\tf.name:\t\t{os.path.basename(system_path)}")
         print()
 
     static_file = StaticFile(file_hash, static_f)
@@ -476,7 +477,7 @@ def __compress_files(static_dir: str,
         # Rename the file
         #
 
-        if versioning == ("md5", "git"):
+        if versioning in ("md5", "git"):
 
             if versioning == "md5":
                 file_name = os.path.basename(system_path)
