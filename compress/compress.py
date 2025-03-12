@@ -60,7 +60,8 @@ def compress_directory(static_dir: str,
                        minify: bool = True,
                        reduce: bool = True,
                        versioning: None | Literal["md5", "git"] = "md5",
-                       verbose: bool = True):
+                       verbose: bool = True,
+                       hide_generated_files: bool = True):
     """
         versioning:
             In order to always update the JS & CSS, it is important to add a version
@@ -86,6 +87,7 @@ Compressing static files (v{__version__}):
     verbose={verbose}
     exclude_paths={exclude_paths}
     dont_compress_paths={dont_compress_paths}
+    hide_generated_files={hide_generated_files}
     static_dir={static_dir}
     templates_dir={templates_dir}
     integrity_dir={integrity_dir}
@@ -117,7 +119,8 @@ Compressing static files (v{__version__}):
                                      minify=minify,
                                      reduce=reduce,
                                      versioning=versioning,
-                                     ignore_paths=ignore_paths)
+                                     ignore_paths=ignore_paths,
+                                     hide_generated_files = hide_generated_files)
 
     #
     # Excluded files
@@ -398,7 +401,8 @@ def __compress_files(static_dir: str,
                      minify: bool,
                      reduce: bool,
                      versioning: None | str,
-                     ignore_paths: list[str]) -> dict:
+                     ignore_paths: list[str],
+                     hide_generated_files: bool = True) -> dict:
 
     integrity_dict = {}
 
@@ -480,22 +484,27 @@ def __compress_files(static_dir: str,
 
         if versioning in ("md5", "git"):
 
+            file_name = os.path.basename(system_path)
+
+            if ".min." not in file_name:
+                raise ValueError(
+                    'Error, invalid filename: It must end with ".js{0}" or ".css{0}" not filename = '.format(
+                        CompressConstants._file_extension) + file_name)
+
             if versioning == "md5":
-                file_name = os.path.basename(system_path)
-
-                if ".min." not in file_name:
-                    raise ValueError(
-                        'Error, invalid filename: It must end with ".js{0}" or ".css{0}" not filename = '.format(
-                            CompressConstants._file_extension) + file_name)
-
-                extension = file_name.rsplit(".", 1)[1]
-
-                simplified_hash = file_hash.replace("/", "-")
-                new_system_path = f"{os.path.dirname(system_path)}/.{simplified_hash}.min.{extension}"
-
+                new_value = file_hash
             else:
-                new_system_path = system_path.replace(".min.", f".{git_short_hash}.min.")
+                new_value = git_short_hash
 
+            if hide_generated_files:
+                prefix = "."
+            else:
+                prefix = ""
+
+            new_value = new_value.replace("/", "-") # Any slash would break the system path
+            file_extension = file_name.rsplit(".min.", 1)[1]
+            new_file_name = f"{prefix}{new_value}.min.{file_extension}"
+            new_system_path = os.path.join(os.path.dirname(system_path), new_file_name)
             os.rename(system_path, new_system_path)
             system_path = new_system_path
 
