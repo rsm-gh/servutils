@@ -54,7 +54,7 @@ class StaticFile:
 
 
 def compress_directory(static_dir: str,
-                       generation_directory: str,
+                       rel_generation_dir: str,
                        templates_dir: str,
                        integrity_dir: None | str,
                        integrity_key_removal: str,
@@ -83,7 +83,7 @@ def compress_directory(static_dir: str,
             None: will use the original file name.
     """
 
-    print(f"""[CONFIGURATION]
+    print(f"""\n[CONFIGURATION]
 
 version={__version__}: 
 minify={minify}
@@ -97,15 +97,15 @@ templates_dir={templates_dir}
 integrity_dir={integrity_dir}
 integrity_key_removal={integrity_key_removal}
 inline="{inline}"
-generation_directory={generation_directory}
+rel_generation_dir={rel_generation_dir}
 header_css={header_css}
 header_js={header_js}""")
 
-    generation_directory = generation_directory.strip()
-    if generation_directory.startswith("/"):
+    rel_generation_dir = rel_generation_dir.strip()
+    if rel_generation_dir.startswith("/"):
         raise ValueError("The generation directory must be a relative path.")
 
-    elif generation_directory == "":
+    elif rel_generation_dir == "":
         raise ValueError("The generation directory cannot be an empty string.")
 
     if versioning not in (None, "md5", "git"):
@@ -121,13 +121,30 @@ header_js={header_js}""")
     #
     # Clean the generation directory
     #
-    __clean_generation_dir(os.path.join(static_dir, generation_directory), verbose)
+    abs_generation_dir = os.path.join(static_dir, rel_generation_dir)
+    __clean_generation_dir(abs_generation_dir, verbose)
+
+
+    #
+    # Integrity dict
+    #
+    integrity_dict = {}
+
+    #
+    # Excluded files
+    #
+    integrity_dict = __add_already_minified_files(static_dir=static_dir,
+                                          abs_generation_dir=abs_generation_dir,
+                                          integrity_key_removal=integrity_key_removal,
+                                          verbose=verbose,
+                                          dont_compress_paths=dont_compress_paths,
+                                          integrity_dict=integrity_dict)
 
     #
     # Compressing the files
     #
     integrity_dict = __compress_files(static_dir=static_dir,
-                                      generation_directory=generation_directory,
+                                      generation_directory=rel_generation_dir,
                                       git_short_hash=git_short_hash,
                                       integrity_key_removal=integrity_key_removal,
                                       verbose=verbose,
@@ -138,15 +155,6 @@ header_js={header_js}""")
                                       header_js = header_js,
                                       header_css = header_css,
                                       inline = inline)
-
-    #
-    # Excluded files
-    #
-    integrity_dict = __add_excluded_files(static_dir=static_dir,
-                                            dont_compress_paths=dont_compress_paths,
-                                            integrity_key_removal=integrity_key_removal,
-                                            verbose=verbose,
-                                            integrity_dict=integrity_dict)
 
 
     #
@@ -404,14 +412,13 @@ def __remove_comments(text):
 
     return new_text
 
-def __clean_generation_dir(generation_dir: str, verbose:bool) -> None:
+def __clean_generation_dir(abs_generation_dir: str, verbose:bool) -> None:
 
     if verbose:
         print("\n[CLEANING GENERATION DIRECTORY]\n")
 
-    for dir_path, _, filenames in os.walk(generation_dir):
+    for dir_path, _, filenames in os.walk(abs_generation_dir):
         for filename in filenames:
-
             file_path = os.path.abspath(os.path.join(dir_path, filename))
             if file_path.endswith(".min.js") or file_path.endswith(".min.dict") or file_path.endswith(".min.css"):
                 os.remove(file_path)
@@ -562,14 +569,15 @@ def __compress_files(static_dir: str,
     return integrity_dict
 
 
-def __add_excluded_files(static_dir: str,
+def __add_already_minified_files(static_dir: str,
+                         abs_generation_dir: str,
                          integrity_key_removal: str,
                          verbose: bool,
                          dont_compress_paths: list[str],
                          integrity_dict:dict) -> dict:
 
     if verbose:
-        print("\n[EXCLUDED FROM GENERATION]\n")
+        print("\n[ADDING ALREADY MINIFIED FILES]\n")
 
     #
     # Get the file paths and sort them
@@ -579,9 +587,11 @@ def __add_excluded_files(static_dir: str,
         for filename in filenames:
             file_path = os.path.abspath(os.path.join(dir_path, filename))
 
+            if file_path.startswith(abs_generation_dir):
+                continue
+
             if any(include_string in file_path.lower() for include_string in dont_compress_paths):
                 if file_path.endswith(".min.js") or file_path.endswith(".min.css"):
-
                     file_paths.append(file_path)
 
     file_paths.sort()
