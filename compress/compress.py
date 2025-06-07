@@ -83,24 +83,23 @@ def compress_directory(static_dir: str,
             None: will use the original file name.
     """
 
+    print(f"""[CONFIGURATION]
 
-    print(f'''
-Compressing static files (v{__version__}): 
-    minify={minify}
-    reduce={reduce}
-    versioning={versioning}
-    verbose={verbose}
-    exclude_paths={exclude_paths}
-    dont_compress_paths={dont_compress_paths}
-    static_dir={static_dir}
-    templates_dir={templates_dir}
-    integrity_dir={integrity_dir}
-    integrity_key_removal={integrity_key_removal}
-    inline="{inline}"
-    generation_directory={generation_directory}
-    header_css="""{header_css}"""
-    header_js="""{header_js}"""
-''')
+version={__version__}: 
+minify={minify}
+reduce={reduce}
+versioning={versioning}
+verbose={verbose}
+exclude_paths={exclude_paths}
+dont_compress_paths={dont_compress_paths}
+static_dir={static_dir}
+templates_dir={templates_dir}
+integrity_dir={integrity_dir}
+integrity_key_removal={integrity_key_removal}
+inline="{inline}"
+generation_directory={generation_directory}
+header_css={header_css}
+header_js={header_js}""")
 
     generation_directory = generation_directory.strip()
     if generation_directory.startswith("/"):
@@ -120,9 +119,9 @@ Compressing static files (v{__version__}):
     ignore_paths = exclude_paths + dont_compress_paths
 
     #
-    # Delete old files
+    # Clean the generation directory
     #
-    __remove_old_files(os.path.join(static_dir, generation_directory), verbose, ignore_paths)
+    __clean_generation_dir(os.path.join(static_dir, generation_directory), verbose)
 
     #
     # Compressing the files
@@ -405,24 +404,17 @@ def __remove_comments(text):
 
     return new_text
 
-def __remove_old_files(static_dir: str,
-                       verbose:bool,
-                       ignore_paths: list[str]) -> None:
+def __clean_generation_dir(generation_dir: str, verbose:bool) -> None:
 
     if verbose:
-        print("\n************ Deleting ************")
-        print("**********************************\n")
+        print("\n[CLEANING GENERATION DIRECTORY]\n")
 
-    for dir_path, _, filenames in os.walk(static_dir):
+    for dir_path, _, filenames in os.walk(generation_dir):
         for filename in filenames:
 
             file_path = os.path.abspath(os.path.join(dir_path, filename))
-            if not any(include_string in file_path.lower() for include_string in ignore_paths) and \
-                    (file_path.endswith(".min.js") or file_path.endswith(".min.dict") or file_path.endswith(".min.css")):
+            if file_path.endswith(".min.js") or file_path.endswith(".min.dict") or file_path.endswith(".min.css"):
                 os.remove(file_path)
-
-                if verbose:
-                    print(" {}".format(file_path))
 
 
 def __compress_files(static_dir: str,
@@ -442,8 +434,7 @@ def __compress_files(static_dir: str,
     integrity_dict = {}
 
     if verbose:
-        print("\n************ Compressing ************")
-        print("*************************************\n")
+        print("\n[GENERATING STATIC FILES]\n")
 
 
     #
@@ -578,8 +569,7 @@ def __add_excluded_files(static_dir: str,
                          integrity_dict:dict) -> dict:
 
     if verbose:
-        print("\n************ Excluded from compression ************")
-        print("***************************************************\n")
+        print("\n[EXCLUDED FROM GENERATION]\n")
 
     #
     # Get the file paths and sort them
@@ -622,8 +612,7 @@ def __create_static_pages(templates_dir: str,
                           integrity_dict: dict) -> None:
 
     if verbose:
-        print("\n************ Static Files ************")
-        print("**************************************\n")
+        print("\n[HTML TEMPLATES]\n")
 
     for dir_path, _, filenames in os.walk(templates_dir):
         for filename in filenames:
@@ -677,8 +666,7 @@ def __create_integrity_file(integrity_file: str,
     # Git Revision
     #
     if verbose:
-        print("\n************ integrity.py ************")
-        print("**************************************\n")
+        print("\n[INTEGRITY FILE]\n")
 
     if verbose:
         print(" _GIT_SHORT_HASH:\t{}".format(_GIT_SHORT_HASH))
