@@ -64,7 +64,6 @@ def compress_directory(static_dir: str,
                        reduce: bool = True,
                        versioning: None | Literal["md5", "git"] = "md5",
                        verbose: bool = True,
-                       hide_generated_files: bool = False,
                        header_js: str = "",
                        header_css: str = "",
                        inline: bool = True):
@@ -93,7 +92,6 @@ Compressing static files (v{__version__}):
     verbose={verbose}
     exclude_paths={exclude_paths}
     dont_compress_paths={dont_compress_paths}
-    hide_generated_files={hide_generated_files}
     static_dir={static_dir}
     templates_dir={templates_dir}
     integrity_dir={integrity_dir}
@@ -137,7 +135,6 @@ Compressing static files (v{__version__}):
                                       reduce=reduce,
                                       versioning=versioning,
                                       ignore_paths=ignore_paths,
-                                      hide_generated_files = hide_generated_files,
                                       header_js = header_js,
                                       header_css = header_css,
                                       inline = inline)
@@ -436,7 +433,6 @@ def __compress_files(static_dir: str,
                      reduce: bool,
                      versioning: None | str,
                      ignore_paths: list[str],
-                     hide_generated_files: bool = True,
                      header_js: str = "",
                      header_css: str = "",
                      inline: bool = True,
@@ -544,14 +540,10 @@ def __compress_files(static_dir: str,
             else:
                 new_value = git_short_hash
 
-            if hide_generated_files:
-                prefix = "."
-            else:
-                prefix = ""
 
             new_value = new_value.replace("/", "-") # Any slash would break the system path
             file_extension = file_name.rsplit(".min.", 1)[1]
-            new_file_name = f"{prefix}{new_value}.min.{file_extension}"
+            new_file_name = f"{new_value}.min.{file_extension}"
             new_write_path = os.path.join(os.path.dirname(write_path), new_file_name)
             os.rename(write_path, new_write_path)
             write_path = new_write_path
