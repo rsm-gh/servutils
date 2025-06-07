@@ -59,7 +59,6 @@ def compress_directory(static_dir: str,
                        integrity_dir: None | str,
                        integrity_key_removal: str,
                        exclude_paths: None | list[str],
-                       dont_compress_paths: None | list[str],
                        minify: bool = True,
                        reduce: bool = True,
                        versioning: None | Literal["md5", "git"] = "md5",
@@ -91,7 +90,6 @@ reduce={reduce}
 versioning={versioning}
 verbose={verbose}
 exclude_paths={exclude_paths}
-dont_compress_paths={dont_compress_paths}
 static_dir={static_dir}
 templates_dir={templates_dir}
 integrity_dir={integrity_dir}
@@ -116,8 +114,6 @@ header_js={header_js}""")
     if exclude_paths is None:
         exclude_paths = []
 
-    ignore_paths = exclude_paths + dont_compress_paths
-
     #
     # Clean the generation directory
     #
@@ -134,11 +130,11 @@ header_js={header_js}""")
     # Excluded files
     #
     integrity_dict = __add_already_minified_files(static_dir=static_dir,
-                                          abs_generation_dir=abs_generation_dir,
-                                          integrity_key_removal=integrity_key_removal,
-                                          verbose=verbose,
-                                          dont_compress_paths=dont_compress_paths,
-                                          integrity_dict=integrity_dict)
+                                                  abs_generation_dir=abs_generation_dir,
+                                                  integrity_key_removal=integrity_key_removal,
+                                                  verbose=verbose,
+                                                  exclude_paths=exclude_paths,
+                                                  integrity_dict=integrity_dict)
 
     #
     # Compressing the files
@@ -151,7 +147,7 @@ header_js={header_js}""")
                                       minify=minify,
                                       reduce=reduce,
                                       versioning=versioning,
-                                      ignore_paths=ignore_paths,
+                                      exclude_paths=exclude_paths,
                                       header_js = header_js,
                                       header_css = header_css,
                                       inline = inline)
@@ -162,7 +158,7 @@ header_js={header_js}""")
     #
     __create_static_pages(templates_dir=templates_dir,
                           git_short_hash=git_short_hash,
-                          dont_compress_paths=dont_compress_paths,
+                          exclude_paths=exclude_paths,
                           verbose=verbose,
                           integrity_dict=integrity_dict)
 
@@ -432,7 +428,7 @@ def __compress_files(static_dir: str,
                      minify: bool,
                      reduce: bool,
                      versioning: None | str,
-                     ignore_paths: list[str],
+                     exclude_paths: list[str],
                      header_js: str = "",
                      header_css: str = "",
                      inline: bool = True,
@@ -453,8 +449,8 @@ def __compress_files(static_dir: str,
 
             abs_path = os.path.abspath(os.path.join(dir_path, filename))
 
-            if any(include_string in abs_path.lower() for include_string in ignore_paths) or not abs_path.endswith(
-                    CompressConstants._file_extension):
+            if any(include_string in abs_path for include_string in exclude_paths) or \
+               not abs_path.endswith(CompressConstants._file_extension):
                 continue
 
             comp_paths.append(abs_path)
@@ -570,11 +566,11 @@ def __compress_files(static_dir: str,
 
 
 def __add_already_minified_files(static_dir: str,
-                         abs_generation_dir: str,
-                         integrity_key_removal: str,
-                         verbose: bool,
-                         dont_compress_paths: list[str],
-                         integrity_dict:dict) -> dict:
+                                 abs_generation_dir: str,
+                                 integrity_key_removal: str,
+                                 verbose: bool,
+                                 exclude_paths: list[str],
+                                 integrity_dict:dict) -> dict:
 
     if verbose:
         print("\n[ADDING ALREADY MINIFIED FILES]\n")
@@ -590,9 +586,11 @@ def __add_already_minified_files(static_dir: str,
             if file_path.startswith(abs_generation_dir):
                 continue
 
-            if any(include_string in file_path.lower() for include_string in dont_compress_paths):
-                if file_path.endswith(".min.js") or file_path.endswith(".min.css"):
-                    file_paths.append(file_path)
+            if any(include_string in file_path for include_string in exclude_paths):
+                continue
+
+            if file_path.endswith(".min.js") or file_path.endswith(".min.css"):
+                file_paths.append(file_path)
 
     file_paths.sort()
 
@@ -617,7 +615,7 @@ def __add_already_minified_files(static_dir: str,
 
 def __create_static_pages(templates_dir: str,
                           git_short_hash: str,
-                          dont_compress_paths: list[str],
+                          exclude_paths: list[str],
                           verbose: bool,
                           integrity_dict: dict) -> None:
 
@@ -629,7 +627,10 @@ def __create_static_pages(templates_dir: str,
 
             file_path = os.path.abspath(os.path.join(dir_path, filename))
 
-            if any(include_string in file_path.lower() for include_string in dont_compress_paths) or not file_path.endswith(CompressConstants._file_extension+".html"):
+            if any(include_string in file_path for include_string in exclude_paths):
+                continue
+
+            if not file_path.endswith(CompressConstants._file_extension+".html"):
                 continue
 
             with open(file_path, "r") as f:
