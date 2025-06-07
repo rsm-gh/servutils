@@ -54,6 +54,7 @@ class StaticFile:
 
 
 def compress_directory(static_dir: str,
+                       generation_directory: str,
                        templates_dir: str,
                        integrity_dir: None | str,
                        integrity_key_removal: str,
@@ -66,8 +67,7 @@ def compress_directory(static_dir: str,
                        hide_generated_files: bool = False,
                        header_js: str = "",
                        header_css: str = "",
-                       inline: bool = True,
-                       generation_directory: str = ""):
+                       inline: bool = True):
     """
         versioning:
             In order to always update the JS & CSS, it is important to add a version
@@ -103,6 +103,13 @@ Compressing static files (v{__version__}):
     generation_directory={generation_directory}
 ''')
 
+    generation_directory = generation_directory.strip()
+    if generation_directory.startswith("/"):
+        raise ValueError("The generation directory must be a relative path.")
+
+    elif generation_directory == "":
+        raise ValueError("The generation directory cannot be an empty string.")
+
     if versioning not in (None, "md5", "git"):
         raise ValueError("Error: the only values that can be accepted for versioning are: None, 'md5' or 'git'.")
 
@@ -116,12 +123,13 @@ Compressing static files (v{__version__}):
     #
     # Delete old files
     #
-    __remove_old_files(static_dir, verbose, ignore_paths)
+    __remove_old_files(os.path.join(static_dir, generation_directory), verbose, ignore_paths)
 
     #
     # Compressing the files
     #
     integrity_dict = __compress_files(static_dir=static_dir,
+                                      generation_directory=generation_directory,
                                       git_short_hash=git_short_hash,
                                       integrity_key_removal=integrity_key_removal,
                                       verbose=verbose,
@@ -132,8 +140,7 @@ Compressing static files (v{__version__}):
                                       hide_generated_files = hide_generated_files,
                                       header_js = header_js,
                                       header_css = header_css,
-                                      inline = inline,
-                                      generation_directory = generation_directory)
+                                      inline = inline)
 
     #
     # Excluded files
@@ -421,6 +428,7 @@ def __remove_old_files(static_dir: str,
 
 
 def __compress_files(static_dir: str,
+                     generation_directory: str,
                      git_short_hash: str,
                      integrity_key_removal: str,
                      verbose: bool,
@@ -432,17 +440,13 @@ def __compress_files(static_dir: str,
                      header_js: str = "",
                      header_css: str = "",
                      inline: bool = True,
-                     generation_directory: str = "") -> dict:
+                     ) -> dict:
 
     integrity_dict = {}
 
     if verbose:
         print("\n************ Compressing ************")
         print("*************************************\n")
-
-
-    if generation_directory.startswith("/"):
-        raise ValueError("The generation directory must be a relative path.")
 
 
     #
@@ -490,9 +494,7 @@ def __compress_files(static_dir: str,
         #
         write_path = comp_path.rsplit(CompressConstants._file_extension, 1)[0] # Remove the extension
         integrity_key_path = write_path
-
-        if generation_directory != "":
-            write_path = os.path.join(os.path.join(static_dir, generation_directory), os.path.basename(write_path))
+        write_path = os.path.join(os.path.join(static_dir, generation_directory), os.path.basename(write_path))
 
         #
         # Reduce (encode) the data
