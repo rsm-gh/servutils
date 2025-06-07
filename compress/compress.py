@@ -441,7 +441,7 @@ def __compress_files(static_dir: str,
     integrity_dict = {}
 
     if verbose:
-        print("\n[GENERATING STATIC FILES]\n")
+        print("\n[GENERATING JS & CSS FILES]\n")
 
 
     #
@@ -622,7 +622,7 @@ def __create_static_pages(templates_dir: str,
                           integrity_dict: dict) -> None:
 
     if verbose:
-        print("\n[HTML TEMPLATES]\n")
+        print("\n[GENERATING HTML FILES]\n")
 
     for dir_path, _, filenames in os.walk(templates_dir):
         for filename in filenames:
