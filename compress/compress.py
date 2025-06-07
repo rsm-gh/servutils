@@ -63,10 +63,11 @@ def compress_directory(static_dir: str,
                        reduce: bool = True,
                        versioning: None | Literal["md5", "git"] = "md5",
                        verbose: bool = True,
-                       hide_generated_files: bool = True,
+                       hide_generated_files: bool = False,
                        header_js: str = "",
                        header_css: str = "",
-                       inline: bool = True):
+                       inline: bool = True,
+                       generation_directory: str = ""):
     """
         versioning:
             In order to always update the JS & CSS, it is important to add a version
@@ -99,6 +100,7 @@ Compressing static files (v{__version__}):
     integrity_key_removal={integrity_key_removal}
     header_js="{header_js}"
     header_css="{header_css}"
+    generation_directory={generation_directory}
 ''')
 
     if versioning not in (None, "md5", "git"):
@@ -120,17 +122,18 @@ Compressing static files (v{__version__}):
     # Compressing the files
     #
     integrity_dict = __compress_files(static_dir=static_dir,
-                                     git_short_hash=git_short_hash,
-                                     integrity_key_removal=integrity_key_removal,
-                                     verbose=verbose,
-                                     minify=minify,
-                                     reduce=reduce,
-                                     versioning=versioning,
-                                     ignore_paths=ignore_paths,
-                                     hide_generated_files = hide_generated_files,
-                                     header_js = header_js,
-                                     header_css = header_css,
-                                     inline = inline)
+                                      git_short_hash=git_short_hash,
+                                      integrity_key_removal=integrity_key_removal,
+                                      verbose=verbose,
+                                      minify=minify,
+                                      reduce=reduce,
+                                      versioning=versioning,
+                                      ignore_paths=ignore_paths,
+                                      hide_generated_files = hide_generated_files,
+                                      header_js = header_js,
+                                      header_css = header_css,
+                                      inline = inline,
+                                      generation_directory = generation_directory)
 
     #
     # Excluded files
@@ -428,13 +431,18 @@ def __compress_files(static_dir: str,
                      hide_generated_files: bool = True,
                      header_js: str = "",
                      header_css: str = "",
-                     inline: bool = True) -> dict:
+                     inline: bool = True,
+                     generation_directory: str = "") -> dict:
 
     integrity_dict = {}
 
     if verbose:
         print("\n************ Compressing ************")
         print("*************************************\n")
+
+
+    if generation_directory.startswith("/"):
+        raise ValueError("The generation directory must be a relative path.")
 
 
     #
@@ -480,14 +488,17 @@ def __compress_files(static_dir: str,
         #
         # Define the system file name (can be renamed later)
         #
-        system_path = comp_path.rsplit(CompressConstants._file_extension, 1)[0]
-        integrity_key_path = system_path
+        write_path = comp_path.rsplit(CompressConstants._file_extension, 1)[0] # Remove the extension
+        integrity_key_path = write_path
+
+        if generation_directory != "":
+            write_path = os.path.join(os.path.join(static_dir, generation_directory), os.path.basename(write_path))
 
         #
         # Reduce (encode) the data
         #
         encode_dictionary = ""
-        if reduce and system_path.endswith(".js"):
+        if reduce and write_path.endswith(".js"):
             file_data, encode_dictionary = reduce_js(file_data,
                                                      public=reduce_public_js,
                                                      skip_items=reduce_public_js_except,
@@ -496,21 +507,22 @@ def __compress_files(static_dir: str,
         #
         # Add the header
         #
-        if system_path.endswith(".css"):
+        if write_path.endswith(".css"):
             file_data = header_css + file_data
-        elif system_path.endswith(".js"):
+
+        elif write_path.endswith(".js"):
             file_data = header_js + file_data
 
         #
         # Write the file
         #
-        with open(system_path, "w") as f:
+        with open(write_path, "w") as f:
             f.write(file_data)
 
         #
         # Calculate the hash
         #
-        file_hash = __get_file_hash(system_path)
+        file_hash = __get_file_hash(write_path)
 
         #
         # Rename the file
@@ -518,7 +530,7 @@ def __compress_files(static_dir: str,
 
         if versioning in ("md5", "git"):
 
-            file_name = os.path.basename(system_path)
+            file_name = os.path.basename(write_path)
 
             if ".min." not in file_name:
                 raise ValueError(
@@ -538,23 +550,23 @@ def __compress_files(static_dir: str,
             new_value = new_value.replace("/", "-") # Any slash would break the system path
             file_extension = file_name.rsplit(".min.", 1)[1]
             new_file_name = f"{prefix}{new_value}.min.{file_extension}"
-            new_system_path = os.path.join(os.path.dirname(system_path), new_file_name)
-            os.rename(system_path, new_system_path)
-            system_path = new_system_path
+            new_write_path = os.path.join(os.path.dirname(write_path), new_file_name)
+            os.rename(write_path, new_write_path)
+            write_path = new_write_path
 
 
         #
         # Write the encode dictionary
         #
-        if reduce and system_path.endswith(".js"):
-            with open(system_path.replace("min.js", "min.dict"), "w") as f:
+        if reduce and write_path.endswith(".js"):
+            with open(write_path.replace("min.js", "min.dict"), "w") as f:
                 f.write(encode_dictionary)
 
 
         #
         # Add to the integrity dict
         #
-        __add_to_integrity(system_path=system_path,
+        __add_to_integrity(system_path=write_path,
                             file_hash=file_hash,
                             compressed_file=integrity_key_path,
                             integrity_key_removal=integrity_key_removal,
