@@ -63,7 +63,10 @@ def compress_directory(static_dir: str,
                        reduce: bool = True,
                        versioning: None | Literal["md5", "git"] = "md5",
                        verbose: bool = True,
-                       hide_generated_files: bool = True):
+                       hide_generated_files: bool = True,
+                       header_js: str = "",
+                       header_css: str = "",
+                       inline_entries: bool = True):
     """
         versioning:
             In order to always update the JS & CSS, it is important to add a version
@@ -81,7 +84,7 @@ def compress_directory(static_dir: str,
     """
 
 
-    print(f"""
+    print(f'''
 Compressing static files (v{__version__}): 
     minify={minify}
     reduce={reduce}
@@ -94,7 +97,9 @@ Compressing static files (v{__version__}):
     templates_dir={templates_dir}
     integrity_dir={integrity_dir}
     integrity_key_removal={integrity_key_removal}
-""")
+    header_js="{header_js}"
+    header_css="{header_css}"
+''')
 
     if versioning not in (None, "md5", "git"):
         raise ValueError("Error: the only values that can be accepted for versioning are: None, 'md5' or 'git'.")
@@ -122,7 +127,9 @@ Compressing static files (v{__version__}):
                                      reduce=reduce,
                                      versioning=versioning,
                                      ignore_paths=ignore_paths,
-                                     hide_generated_files = hide_generated_files)
+                                     hide_generated_files = hide_generated_files,
+                                     header_js = header_js,
+                                     header_css = header_css)
 
     #
     # Excluded files
@@ -184,7 +191,8 @@ def __get_comp_data(comp_path: str,
                     static_dir: str,
                     verbose: bool,
                     minify: bool,
-                    reduce: bool) -> (str, bool, list):
+                    reduce: bool,
+                    inline: bool) -> (str, bool, list):
 
     if verbose:
         print(" " + comp_path)
@@ -237,12 +245,17 @@ def __get_comp_data(comp_path: str,
             compressed_data = compressed_data.replace('"use strict";', "")
             compressed_data = compressed_data.replace("'use strict';", "")
             compressed_data = compressed_data.replace(';}', "}")
+
+            if inline and not compressed_data.endswith(";"):
+                compressed_data += ";"
+
             compressed_lines.append(compressed_data)
 
             if minify and len(compressed_data.split("\n")) > 1:
                 print("[Info] multiple lines compressing", include_path)
                 for c_line in compressed_data.split("\n"):
                     print("\t" + c_line[:50])
+
 
         elif line.startswith(CompressConstants._include_css):
 
@@ -276,9 +289,16 @@ def __get_comp_data(comp_path: str,
                 compressed_lines.append(read_line)
 
         else:
+
+            if inline and line.strip() == "":
+                continue
+
             compressed_lines.append(line)
 
-    file_data = "\n".join(compressed_lines)
+    if inline:
+        file_data = "".join(compressed_lines)
+    else:
+        file_data = "\n".join(compressed_lines)
 
     return file_data, reduce_public_js, reduce_public_js_except
 
@@ -404,7 +424,10 @@ def __compress_files(static_dir: str,
                      reduce: bool,
                      versioning: None | str,
                      ignore_paths: list[str],
-                     hide_generated_files: bool = True) -> dict:
+                     hide_generated_files: bool = True,
+                     header_js: str = "",
+                     header_css: str = "",
+                     inline_entries: bool = True) -> dict:
 
     integrity_dict = {}
 
@@ -442,7 +465,8 @@ def __compress_files(static_dir: str,
                                                                                 static_dir,
                                                                                 verbose,
                                                                                 minify,
-                                                                                reduce)
+                                                                                reduce,
+                                                                                inline_entries)
 
         #
         # Improve the indentation
@@ -461,13 +485,20 @@ def __compress_files(static_dir: str,
         #
         # Reduce (encode) the data
         #
-
         encode_dictionary = ""
         if reduce and system_path.endswith(".js"):
             file_data, encode_dictionary = reduce_js(file_data,
                                                      public=reduce_public_js,
                                                      skip_items=reduce_public_js_except,
                                                      verbose=verbose)
+
+        #
+        # Add the header
+        #
+        if system_path.endswith(".css"):
+            file_data = header_css + file_data
+        elif system_path.endswith(".js"):
+            file_data = header_js + file_data
 
         #
         # Write the file
