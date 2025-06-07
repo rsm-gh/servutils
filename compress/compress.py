@@ -96,9 +96,10 @@ Compressing static files (v{__version__}):
     templates_dir={templates_dir}
     integrity_dir={integrity_dir}
     integrity_key_removal={integrity_key_removal}
-    header_js="{header_js}"
-    header_css="{header_css}"
+    inline="{inline}"
     generation_directory={generation_directory}
+    header_css="""{header_css}"""
+    header_js="""{header_js}"""
 ''')
 
     generation_directory = generation_directory.strip()
