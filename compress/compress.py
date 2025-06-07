@@ -129,28 +129,27 @@ header_js={header_js}""")
     #
     # Excluded files
     #
-    integrity_dict = __add_already_minified_files(static_dir=static_dir,
-                                                  abs_generation_dir=abs_generation_dir,
-                                                  integrity_key_removal=integrity_key_removal,
-                                                  verbose=verbose,
-                                                  exclude_paths=exclude_paths,
-                                                  integrity_dict=integrity_dict)
+    integrity_dict.update(__add_already_minified_files(static_dir=static_dir,
+                                                       abs_generation_dir=abs_generation_dir,
+                                                       integrity_key_removal=integrity_key_removal,
+                                                       verbose=verbose,
+                                                       exclude_paths=exclude_paths))
 
     #
     # Compressing the files
     #
-    integrity_dict = __compress_files(static_dir=static_dir,
-                                      generation_directory=rel_generation_dir,
-                                      git_short_hash=git_short_hash,
-                                      integrity_key_removal=integrity_key_removal,
-                                      verbose=verbose,
-                                      minify=minify,
-                                      reduce=reduce,
-                                      versioning=versioning,
-                                      exclude_paths=exclude_paths,
-                                      header_js = header_js,
-                                      header_css = header_css,
-                                      inline = inline)
+    integrity_dict.update(__compress_files(static_dir=static_dir,
+                                           generation_directory=rel_generation_dir,
+                                           git_short_hash=git_short_hash,
+                                           integrity_key_removal=integrity_key_removal,
+                                           verbose=verbose,
+                                           minify=minify,
+                                           reduce=reduce,
+                                           versioning=versioning,
+                                           exclude_paths=exclude_paths,
+                                           header_js = header_js,
+                                           header_css = header_css,
+                                           inline = inline))
 
 
     #
@@ -569,8 +568,9 @@ def __add_already_minified_files(static_dir: str,
                                  abs_generation_dir: str,
                                  integrity_key_removal: str,
                                  verbose: bool,
-                                 exclude_paths: list[str],
-                                 integrity_dict:dict) -> dict:
+                                 exclude_paths: list[str]) -> dict:
+
+    integrity_dict = {}
 
     if verbose:
         print("\n[ADDING ALREADY MINIFIED FILES]\n")
