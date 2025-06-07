@@ -12,10 +12,12 @@ import subprocess
 from typing import Literal
 from base64 import b64encode
 from datetime import datetime
+
+from jsmin import jsmin
+from cssmin import cssmin
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from compress.external.jsmin import jsmin
-from compress.external.cssmin import cssmin
 from compress.reduce_js import reduce_js
 
 __version__ = "25.01.19.1"
