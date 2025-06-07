@@ -66,7 +66,7 @@ def compress_directory(static_dir: str,
                        hide_generated_files: bool = True,
                        header_js: str = "",
                        header_css: str = "",
-                       inline_entries: bool = True):
+                       inline: bool = True):
     """
         versioning:
             In order to always update the JS & CSS, it is important to add a version
@@ -129,7 +129,8 @@ Compressing static files (v{__version__}):
                                      ignore_paths=ignore_paths,
                                      hide_generated_files = hide_generated_files,
                                      header_js = header_js,
-                                     header_css = header_css)
+                                     header_css = header_css,
+                                     inline = inline)
 
     #
     # Excluded files
@@ -427,7 +428,7 @@ def __compress_files(static_dir: str,
                      hide_generated_files: bool = True,
                      header_js: str = "",
                      header_css: str = "",
-                     inline_entries: bool = True) -> dict:
+                     inline: bool = True) -> dict:
 
     integrity_dict = {}
 
@@ -466,7 +467,7 @@ def __compress_files(static_dir: str,
                                                                                 verbose,
                                                                                 minify,
                                                                                 reduce,
-                                                                                inline_entries)
+                                                                                inline)
 
         #
         # Improve the indentation
