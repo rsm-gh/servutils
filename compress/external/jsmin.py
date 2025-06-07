@@ -25,36 +25,18 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import sys
 
-is_3 = sys.version_info >= (3, 0)
-if is_3:
-    import io
-else:
-    import StringIO
-
-    try:
-        import cStringIO
-    except ImportError:
-        cStringIO = None
+import io
 
 __all__ = ['jsmin', 'JavascriptMinify']
-__version__ = '2.1.6'
+__version__ = '3.0.1'
 
 
 def jsmin(js, **kwargs):
     """
     returns a minified version of the javascript string
     """
-    if not is_3:
-        if cStringIO and not isinstance(js, unicode):
-            # strings can use cStringIO for a 3x performance
-            # improvement, but unicode (in python2) cannot
-            klass = cStringIO.StringIO
-        else:
-            klass = StringIO.StringIO
-    else:
-        klass = io.StringIO
+    klass = io.StringIO
     ins = klass(js)
     outs = klass()
     JavascriptMinify(ins, outs, **kwargs).minify()
@@ -87,6 +69,7 @@ class JavascriptMinify(object):
                 self.is_return = self.return_buf == 'return'
             else:
                 self.return_buf = ''
+                self.is_return = self.is_return and char < '!'
             self.outs.write(char)
             if self.is_return:
                 self.return_buf = ''
@@ -131,7 +114,7 @@ class JavascriptMinify(object):
                 next2, do_newline = self.newline(
                     previous_non_space, next2, do_newline)
             elif next1 < '!':
-                if (previous_non_space in space_strings
+                if (previous_non_space in space_strings \
                     or previous_non_space > '~') \
                         and (next2 in space_strings or next2 > '~'):
                     do_space = True
@@ -201,17 +184,17 @@ class JavascriptMinify(object):
 
         write('/')
 
-        next0 = next2
-        while next0 != '/' or in_char_class:
-            write(next0)
-            if next0 == '\\':
+        next = next2
+        while next and (next != '/' or in_char_class):
+            write(next)
+            if next == '\\':
                 write(read(1))  # whatever is next is escaped
-            elif next0 == '[':
+            elif next == '[':
                 write(read(1))  # character class cannot be empty
                 in_char_class = True
-            elif next0 == ']':
+            elif next == ']':
                 in_char_class = False
-            next0 = read(1)
+            next = read(1)
 
         write('/')
 
@@ -236,9 +219,17 @@ class JavascriptMinify(object):
         # Skip past first /* and avoid catching on /*/...*/
         next1 = read(1)
         next2 = read(1)
+
+        comment_buffer = '/*'
         while next1 != '*' or next2 != '/':
+            comment_buffer += next1
             next1 = next2
             next2 = read(1)
+
+        if comment_buffer.startswith("/*!"):
+            # comment needs preserving
+            self.outs.write(comment_buffer)
+            self.outs.write("*/\n")
 
     def newline(self, previous_non_space, next2, do_newline):
         read = self.ins.read
@@ -258,9 +249,3 @@ class JavascriptMinify(object):
                     break
 
         return next2, do_newline
-
-
-if __name__ == '__main__':
-    minifier = JavascriptMinify(sys.stdin, sys.stdout)
-    minifier.minify()
-    sys.stdout.write('\n')
