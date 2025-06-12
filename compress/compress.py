@@ -65,7 +65,8 @@ def compress_directory(static_dir: str,
                        verbose: bool = True,
                        header_js: str = "",
                        header_css: str = "",
-                       inline: bool = True):
+                       inline: bool = True,
+                       clean: bool = True):
     """
         versioning:
             In order to always update the JS & CSS, it is important to add a version
@@ -118,7 +119,8 @@ header_js={header_js}""")
     # Clean the generation directory
     #
     abs_generation_dir = os.path.join(static_dir, rel_generation_dir)
-    __clean_generation_dir(abs_generation_dir, verbose)
+    if clean:
+        __clean_generation_dir(abs_generation_dir, verbose)
 
 
     #
