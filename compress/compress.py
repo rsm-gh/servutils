@@ -4,9 +4,16 @@
 #  Copyright (C) Rafael Senties Martinelli. All Rights Reserved.
 #
 
+# Todo: Option to update (and load) the exported map from an existent file
+# Todo: Use md5 for the filenames ?
+# Todo: rename the module, static_generator.run
+# Todo: rename arg as encode_js
+# Todo: specify the files to replace (.html, .txt, etc..)
+
 import re
 import os
 import sys
+import json
 import hashlib
 import subprocess
 from typing import Literal
@@ -30,33 +37,11 @@ class CompressConstants:
     _include = "include:"
     _static_path = "STATIC_PATH/" # the slash is important
     _reduce_public_js_except = "reducePublicJSExcept:"
-    _integrity_template = """#!/usr/bin/python3
-
-# This file is dynamically generated, DO NOT MODIFY IT by hand.
-
-class StaticFile:
-    def __init__(self, file_sha384: str , static_path: str) -> None:
-        # The attributes can not be protected, or django template will not be able to read them.
-        self.sha384 = file_sha384
-        self.integrity = "sha384-" + file_sha384
-        self.static = static_path
-
-_GIT_SHORT_HASH = {}
-_INTEGRITY_DICT = {}
-"""
-
-class StaticFile:
-    def __init__(self, file_sha384: str , static_path: str) -> None:
-        # The attributes can not be protected, or django template will not be able to read them.
-        self.sha384 = file_sha384
-        self.integrity = "sha384-" + file_sha384
-        self.static = static_path
-
 
 def compress_directory(static_dir: str,
                        rel_generation_dir: str,
                        templates_dir: str,
-                       integrity_dir: None | str,
+                       map_file_name: None | str,
                        integrity_key_removal: str,
                        exclude_paths: None | list[str],
                        minify: bool = True,
@@ -93,7 +78,7 @@ verbose={verbose}
 exclude_paths={exclude_paths}
 static_dir={static_dir}
 templates_dir={templates_dir}
-integrity_dir={integrity_dir}
+map_file_name={map_file_name}
 integrity_key_removal={integrity_key_removal}
 inline="{inline}"
 rel_generation_dir={rel_generation_dir}
@@ -126,12 +111,12 @@ header_js={header_js}""")
     #
     # Integrity dict
     #
-    integrity_dict = {}
+    map_dict = {}
 
     #
     # Excluded files
     #
-    integrity_dict.update(__add_already_minified_files(static_dir=static_dir,
+    map_dict.update(__add_already_minified_files(static_dir=static_dir,
                                                        abs_generation_dir=abs_generation_dir,
                                                        integrity_key_removal=integrity_key_removal,
                                                        verbose=verbose,
@@ -140,7 +125,7 @@ header_js={header_js}""")
     #
     # Compressing the files
     #
-    integrity_dict.update(__compress_files(static_dir=static_dir,
+    map_dict.update(__compress_files(static_dir=static_dir,
                                            generation_directory=rel_generation_dir,
                                            git_short_hash=git_short_hash,
                                            integrity_key_removal=integrity_key_removal,
@@ -157,21 +142,23 @@ header_js={header_js}""")
     #
     # Creating HARD STATIC pages
     #
-    __create_static_pages(templates_dir=templates_dir,
+    __update_static_files(templates_dir=templates_dir,
                           git_short_hash=git_short_hash,
                           exclude_paths=exclude_paths,
                           verbose=verbose,
-                          integrity_dict=integrity_dict)
+                          map_dict=map_dict)
 
 
     #
     # Create the integrity file
     #
-    if integrity_dir is not None:
-        __create_integrity_file(integrity_file=os.path.join(integrity_dir, "integrity.py"),
-                                git_short_hash=git_short_hash,
-                                verbose=verbose,
-                                integrity_dict=integrity_dict)
+    if map_file_name is not None:
+
+        map_path = os.path.join(abs_generation_dir, map_file_name)
+        with open(map_path, "w") as f:
+            f.write(json.dumps(map_dict, sort_keys=True, indent=4),)
+
+        print("Generated MAP file:", map_path)
 
 def __get_git_revision_short_hash():
     return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
@@ -190,15 +177,6 @@ def __test_include_path(comp_path, include_path):
     if not os.path.exists(include_path):
         print(f"\nCritical Error: Non-Existent path '{include_path}' defined in '{comp_path}'")
         sys.exit(1)
-
-# static_dir: str,
-#                      git_short_hash: str,
-#                      integrity_key_removal: str,
-#                      verbose: bool,
-#                      minify: bool,
-#                      reduce: bool,
-#                      versioning: None | str,
-#                      ignore_paths: list[str]
 
 def __get_comp_data(comp_path: str,
                     static_dir: str,
@@ -344,8 +322,11 @@ def __add_to_integrity(system_path: str,
         print(f"\tf.name:\t\t{os.path.basename(system_path)}")
         print()
 
-    static_file = StaticFile(file_hash, static_f)
-    dictionary[integrity_key] = static_file
+    dictionary[integrity_key] = {
+        'abs_path': system_path,
+        'integrity': "sha384-" + file_hash,
+        'static': static_f,
+    }
 
 
 def __remove_comments(text):
@@ -435,7 +416,7 @@ def __compress_files(static_dir: str,
                      inline: bool = True,
                      ) -> dict:
 
-    integrity_dict = {}
+    map_dict = {}
 
     if verbose:
         print("\n[GENERATING JS & CSS FILES]\n")
@@ -560,10 +541,10 @@ def __compress_files(static_dir: str,
                             file_hash=file_hash,
                             compressed_file=integrity_key_path,
                             integrity_key_removal=integrity_key_removal,
-                            dictionary=integrity_dict,
+                            dictionary=map_dict,
                             verbose=verbose)
 
-    return integrity_dict
+    return map_dict
 
 
 def __add_already_minified_files(static_dir: str,
@@ -572,7 +553,7 @@ def __add_already_minified_files(static_dir: str,
                                  verbose: bool,
                                  exclude_paths: list[str]) -> dict:
 
-    integrity_dict = {}
+    map_dict = {}
 
     if verbose:
         print("\n[ADDING ALREADY MINIFIED FILES]\n")
@@ -610,19 +591,19 @@ def __add_already_minified_files(static_dir: str,
                            file_hash=file_hash,
                            compressed_file=file_path,
                            integrity_key_removal=integrity_key_removal,
-                           dictionary=integrity_dict,
+                           dictionary=map_dict,
                            verbose=verbose)
 
-    return integrity_dict # this may not be necessary, but it will clarify the output.
+    return map_dict # this may not be necessary, but it will clarify the output.
 
-def __create_static_pages(templates_dir: str,
+def __update_static_files(templates_dir: str,
                           git_short_hash: str,
                           exclude_paths: list[str],
                           verbose: bool,
-                          integrity_dict: dict) -> None:
+                          map_dict: dict) -> None:
 
     if verbose:
-        print("\n[GENERATING HTML FILES]\n")
+        print("\n[GENERATING STATIC FILES]\n")
 
     for dir_path, _, filenames in os.walk(templates_dir):
         for filename in filenames:
@@ -642,9 +623,13 @@ def __create_static_pages(templates_dir: str,
             template = template.replace("<!DOCTYPE html>",
                                         "<!DOCTYPE html>\n\n<!-- File dynamically generated -->\n")
 
-            for key, value in integrity_dict.items():
-                template = template.replace("{{" + key + ".integrity}}", value.integrity)
-                template = template.replace("{{" + key + ".static}}", value.static)
+            for key, values in map_dict.items():
+
+                integrity = values['integrity']
+                static = values['static']
+
+                template = template.replace("{{" + key + ".integrity}}", integrity)
+                template = template.replace("{{" + key + ".static}}", static)
 
             system_path = file_path.replace(CompressConstants._file_extension+".html", ".html")
 
@@ -653,37 +638,3 @@ def __create_static_pages(templates_dir: str,
 
             if verbose:
                 print(" " + system_path)
-
-
-def __create_integrity_file(integrity_file: str,
-                            git_short_hash: str,
-                            verbose: bool,
-                            integrity_dict:dict) -> None:
-    integrity_data = ""
-    for key in sorted(integrity_dict.keys()):
-        value = integrity_dict[key]
-        integrity_data += f"    '{key}':\n        StaticFile('{value.sha384}',\n                   '{value.static}'),\n"
-    integrity_data = "{\n"+integrity_data+"}"
-
-    integrity_template = CompressConstants._integrity_template.format(f"'{git_short_hash}'", integrity_data)
-    with open(integrity_file, "w") as f:
-        f.write(integrity_template)
-
-    #
-    # Test the file
-    #
-    sys.path.insert(2, os.path.dirname(integrity_file))
-    from integrity import _INTEGRITY_DICT, _GIT_SHORT_HASH
-
-    #
-    # Git Revision
-    #
-    if verbose:
-        print("\n[INTEGRITY FILE]\n")
-
-    if verbose:
-        print(" _GIT_SHORT_HASH:\t{}".format(_GIT_SHORT_HASH))
-        print(" _INTEGRITY_DICT:\t{} values".format(len(_INTEGRITY_DICT.values())))
-
-    print()
-    print()
