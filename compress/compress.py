@@ -96,6 +96,10 @@ header_js={header_js}""")
     if exclude_paths is None:
         exclude_paths = []
 
+
+    if clean:
+        __clean_generation_dir(generation_dir=generation_dir, verbose=verbose)
+
     #
     # Integrity dict
     #
