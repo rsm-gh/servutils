@@ -39,8 +39,8 @@ class CompressConstants:
     _reduce_public_js_except = "reducePublicJSExcept:"
 
 def compress_directory(static_dir: str,
-                       rel_generation_dir: str,
                        templates_dir: str,
+                       generation_dir: str,
                        map_file_name: None | str,
                        integrity_key_removal: str,
                        exclude_paths: None | list[str],
@@ -81,16 +81,12 @@ templates_dir={templates_dir}
 map_file_name={map_file_name}
 integrity_key_removal={integrity_key_removal}
 inline="{inline}"
-rel_generation_dir={rel_generation_dir}
+generation_dir={generation_dir}
 header_css={header_css}
 header_js={header_js}""")
 
-    rel_generation_dir = rel_generation_dir.strip()
-    if rel_generation_dir.startswith("/"):
-        raise ValueError("The generation directory must be a relative path.")
-
-    elif rel_generation_dir == "":
-        raise ValueError("The generation directory cannot be an empty string.")
+    if not os.path.exists(generation_dir):
+        raise ValueError("The generation directory does not exist")
 
     if versioning not in (None, "md5", "git"):
         raise ValueError("Error: the only values that can be accepted for versioning are: None, 'md5' or 'git'.")
@@ -101,14 +97,6 @@ header_js={header_js}""")
         exclude_paths = []
 
     #
-    # Clean the generation directory
-    #
-    abs_generation_dir = os.path.join(static_dir, rel_generation_dir)
-    if clean:
-        __clean_generation_dir(abs_generation_dir, verbose)
-
-
-    #
     # Integrity dict
     #
     map_dict = {}
@@ -116,33 +104,35 @@ header_js={header_js}""")
     #
     # Excluded files
     #
-    map_dict.update(__add_already_minified_files(static_dir=static_dir,
-                                                       abs_generation_dir=abs_generation_dir,
-                                                       integrity_key_removal=integrity_key_removal,
-                                                       verbose=verbose,
-                                                       exclude_paths=exclude_paths))
+    __add_already_minified_files(static_dir=static_dir,
+                                 integrity_key_removal=integrity_key_removal,
+                                 verbose=verbose,
+                                 exclude_paths=exclude_paths,
+                                 map_dict=map_dict)
 
     #
     # Compressing the files
     #
-    map_dict.update(__compress_files(static_dir=static_dir,
-                                           generation_directory=rel_generation_dir,
-                                           git_short_hash=git_short_hash,
-                                           integrity_key_removal=integrity_key_removal,
-                                           verbose=verbose,
-                                           minify=minify,
-                                           reduce=reduce,
-                                           versioning=versioning,
-                                           exclude_paths=exclude_paths,
-                                           header_js = header_js,
-                                           header_css = header_css,
-                                           inline = inline))
+    compress_dict = __compress_files(static_dir=static_dir,
+                                     generation_dir=generation_dir,
+                                     map_dict=map_dict,
+                                     git_short_hash=git_short_hash,
+                                     integrity_key_removal=integrity_key_removal,
+                                     verbose=verbose,
+                                     minify=minify,
+                                     reduce=reduce,
+                                     versioning=versioning,
+                                     exclude_paths=exclude_paths,
+                                     header_js = header_js,
+                                     header_css = header_css,
+                                     inline = inline)
 
 
     #
     # Creating HARD STATIC pages
     #
     __update_static_files(templates_dir=templates_dir,
+                          generation_dir=generation_dir,
                           git_short_hash=git_short_hash,
                           exclude_paths=exclude_paths,
                           verbose=verbose,
@@ -154,9 +144,9 @@ header_js={header_js}""")
     #
     if map_file_name is not None:
 
-        map_path = os.path.join(abs_generation_dir, map_file_name)
+        map_path = os.path.join(generation_dir, map_file_name)
         with open(map_path, "w") as f:
-            f.write(json.dumps(map_dict, sort_keys=True, indent=4),)
+            f.write(json.dumps(map_dict, sort_keys=True, indent=4))
 
         print("Generated MAP file:", map_path)
 
@@ -302,22 +292,21 @@ def __get_file_hash(abs_path: str) -> str:
     sha_digest = hashlib.sha384(file_data).digest()
     return b64encode(sha_digest).decode("utf-8")
 
-def __add_to_integrity(system_path: str,
-                       file_hash: str,
-                       compressed_file: str,
-                       integrity_key_removal: str,
-                       dictionary: {},
-                       verbose:bool):
+def __add_map_entry(system_path: str,
+                    static_path: str,
+                    file_hash: str,
+                    compressed_file: str,
+                    integrity_key_removal: str,
+                    dictionary: {},
+                    verbose:bool):
 
     integrity_key = compressed_file.replace(integrity_key_removal, "", 1).lower()
     for forbidden_char, replace_char in (("/", "_"), ("-","_"), (".", "_")):
         integrity_key = integrity_key.replace(forbidden_char, replace_char)
 
-    static_f = "/static/" + system_path.split("static/")[1]
-
     if verbose:
         print(f"\tkey:\t\t{integrity_key}")
-        print(f"\tstatic:\t\t{static_f}")
+        print(f"\tstatic:\t\t{static_path}")
         print(f"\tsha384:\t\t{file_hash}")
         print(f"\tf.name:\t\t{os.path.basename(system_path)}")
         print()
@@ -325,7 +314,7 @@ def __add_to_integrity(system_path: str,
     dictionary[integrity_key] = {
         'abs_path': system_path,
         'integrity': "sha384-" + file_hash,
-        'static': static_f,
+        'static': static_path,
     }
 
 
@@ -390,12 +379,12 @@ def __remove_comments(text):
 
     return new_text
 
-def __clean_generation_dir(abs_generation_dir: str, verbose:bool) -> None:
+def __clean_generation_dir(generation_dir: str, verbose:bool) -> None:
 
     if verbose:
         print("\n[CLEANING GENERATION DIRECTORY]\n")
 
-    for dir_path, _, filenames in os.walk(abs_generation_dir):
+    for dir_path, _, filenames in os.walk(generation_dir):
         for filename in filenames:
             file_path = os.path.abspath(os.path.join(dir_path, filename))
             if file_path.endswith(".min.js") or file_path.endswith(".min.dict") or file_path.endswith(".min.css"):
@@ -403,7 +392,8 @@ def __clean_generation_dir(abs_generation_dir: str, verbose:bool) -> None:
 
 
 def __compress_files(static_dir: str,
-                     generation_directory: str,
+                     generation_dir: str,
+                     map_dict: {},
                      git_short_hash: str,
                      integrity_key_removal: str,
                      verbose: bool,
@@ -413,10 +403,7 @@ def __compress_files(static_dir: str,
                      exclude_paths: list[str],
                      header_js: str = "",
                      header_css: str = "",
-                     inline: bool = True,
-                     ) -> dict:
-
-    map_dict = {}
+                     inline: bool = True) -> dict:
 
     if verbose:
         print("\n[GENERATING JS & CSS FILES]\n")
@@ -467,7 +454,7 @@ def __compress_files(static_dir: str,
         #
         write_path = comp_path.rsplit(CompressConstants._file_extension, 1)[0] # Remove the extension
         integrity_key_path = write_path
-        write_path = os.path.join(os.path.join(static_dir, generation_directory), os.path.basename(write_path))
+        write_path = os.path.join(os.path.join(static_dir, generation_dir), os.path.basename(write_path))
 
         #
         # Reduce (encode) the data
@@ -537,23 +524,22 @@ def __compress_files(static_dir: str,
         #
         # Add to the integrity dict
         #
-        __add_to_integrity(system_path=write_path,
-                            file_hash=file_hash,
-                            compressed_file=integrity_key_path,
-                            integrity_key_removal=integrity_key_removal,
-                            dictionary=map_dict,
-                            verbose=verbose)
-
-    return map_dict
+        if map_dict is not None:
+            static_path = f"/{os.path.basename(generation_dir)}{write_path.replace(generation_dir, "")}"
+            __add_map_entry(system_path=write_path,
+                           static_path=static_path,
+                           file_hash=file_hash,
+                           compressed_file=integrity_key_path,
+                           integrity_key_removal=integrity_key_removal,
+                           dictionary=map_dict,
+                           verbose=verbose)
 
 
 def __add_already_minified_files(static_dir: str,
-                                 abs_generation_dir: str,
                                  integrity_key_removal: str,
                                  verbose: bool,
-                                 exclude_paths: list[str]) -> dict:
-
-    map_dict = {}
+                                 exclude_paths: list[str],
+                                 map_dict: {}) -> dict:
 
     if verbose:
         print("\n[ADDING ALREADY MINIFIED FILES]\n")
@@ -565,9 +551,6 @@ def __add_already_minified_files(static_dir: str,
     for dir_path, _, filenames in os.walk(static_dir):
         for filename in filenames:
             file_path = os.path.abspath(os.path.join(dir_path, filename))
-
-            if file_path.startswith(abs_generation_dir):
-                continue
 
             if any(include_string in file_path for include_string in exclude_paths):
                 continue
@@ -586,17 +569,20 @@ def __add_already_minified_files(static_dir: str,
             print(" " + file_path)
 
         file_hash = __get_file_hash(file_path)
+        static_path = "/static/" + file_path.split("static/")[1]
 
-        __add_to_integrity(system_path=file_path,
-                           file_hash=file_hash,
-                           compressed_file=file_path,
-                           integrity_key_removal=integrity_key_removal,
-                           dictionary=map_dict,
-                           verbose=verbose)
+        __add_map_entry(system_path=file_path,
+                       static_path=static_path,
+                       file_hash=file_hash,
+                       compressed_file=file_path,
+                       integrity_key_removal=integrity_key_removal,
+                       dictionary=map_dict,
+                       verbose=verbose)
 
     return map_dict # this may not be necessary, but it will clarify the output.
 
 def __update_static_files(templates_dir: str,
+                          generation_dir: str,
                           git_short_hash: str,
                           exclude_paths: list[str],
                           verbose: bool,
@@ -631,7 +617,12 @@ def __update_static_files(templates_dir: str,
                 template = template.replace("{{" + key + ".integrity}}", integrity)
                 template = template.replace("{{" + key + ".static}}", static)
 
-            system_path = file_path.replace(CompressConstants._file_extension+".html", ".html")
+
+            final_name = os.path.basename(file_path).replace(".comp.",".")
+            system_path = os.path.join(generation_dir, final_name)
+
+            if os.path.exists(system_path):
+                raise ValueError("File already exists: " + system_path)
 
             with open(system_path, "w") as f:
                 f.write(template)
