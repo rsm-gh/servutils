@@ -14,6 +14,7 @@ import re
 import os
 import sys
 import json
+import shutil
 import hashlib
 import subprocess
 from typing import Literal
@@ -98,7 +99,11 @@ header_js={header_js}""")
 
 
     if clean:
-        __clean_generation_dir(generation_dir=generation_dir, verbose=verbose)
+        print("\n[CLEANING GENERATION DIRECTORY]\n")
+        if os.path.exists(generation_dir):
+            shutil.rmtree(generation_dir)
+            os.mkdir(generation_dir)
+
 
     #
     # Integrity dict
@@ -382,17 +387,6 @@ def __remove_comments(text):
     new_text = "\n".join(item for item in text_items)
 
     return new_text
-
-def __clean_generation_dir(generation_dir: str, verbose:bool) -> None:
-
-    if verbose:
-        print("\n[CLEANING GENERATION DIRECTORY]\n")
-
-    for dir_path, _, filenames in os.walk(generation_dir):
-        for filename in filenames:
-            file_path = os.path.abspath(os.path.join(dir_path, filename))
-            if file_path.endswith(".min.js") or file_path.endswith(".min.dict") or file_path.endswith(".min.css"):
-                os.remove(file_path)
 
 
 def __compress_files(static_dir: str,
