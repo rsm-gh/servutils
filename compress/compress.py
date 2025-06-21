@@ -52,7 +52,8 @@ def compress_directory(static_dir: str,
                        header_js: str = "",
                        header_css: str = "",
                        inline: bool = True,
-                       clean: bool = True):
+                       clean: bool = True,
+                       keep_tree: bool = False):
     """
         versioning:
             In order to always update the JS & CSS, it is important to add a version
@@ -82,6 +83,7 @@ templates_dir={templates_dir}
 map_file_name={map_file_name}
 integrity_key_removal={integrity_key_removal}
 inline="{inline}"
+keep_tree={keep_tree}
 generation_dir={generation_dir}
 header_css={header_css}
 header_js={header_js}""")
@@ -145,7 +147,8 @@ header_js={header_js}""")
                           git_short_hash=git_short_hash,
                           exclude_paths=exclude_paths,
                           verbose=verbose,
-                          map_dict=map_dict)
+                          map_dict=map_dict,
+                          keep_tree=keep_tree)
 
 
     #
@@ -584,7 +587,8 @@ def __update_static_files(templates_dir: str,
                           git_short_hash: str,
                           exclude_paths: list[str],
                           verbose: bool,
-                          map_dict: dict) -> None:
+                          map_dict: dict,
+                          keep_tree: bool = False) -> None:
 
     if verbose:
         print("\n[GENERATING STATIC FILES]\n")
@@ -592,15 +596,15 @@ def __update_static_files(templates_dir: str,
     for dir_path, _, filenames in os.walk(templates_dir):
         for filename in filenames:
 
-            file_path = os.path.abspath(os.path.join(dir_path, filename))
+            template_path = os.path.abspath(os.path.join(dir_path, filename))
 
-            if any(include_string in file_path for include_string in exclude_paths):
+            if any(include_string in template_path for include_string in exclude_paths):
                 continue
 
-            if not file_path.endswith(CompressConstants._file_extension+".html"):
+            if not template_path.endswith(CompressConstants._file_extension+".html"):
                 continue
 
-            with open(file_path, "r") as f:
+            with open(template_path, "r") as f:
                 template = f.read()
 
             template = template.replace("{{git_versioning}}", git_short_hash)
@@ -616,14 +620,32 @@ def __update_static_files(templates_dir: str,
                 template = template.replace("{{" + key + ".static}}", static)
 
 
-            final_name = os.path.basename(file_path).replace(".comp.",".")
-            system_path = os.path.join(generation_dir, final_name)
+            final_name = os.path.basename(template_path).replace(".comp.",".")
 
-            if os.path.exists(system_path):
-                raise ValueError("File already exists: " + system_path)
+            if keep_tree:
 
-            with open(system_path, "w") as f:
+                if not templates_dir.endswith("/"):
+                    templates_dir += "/"
+
+                base_name = os.path.basename(os.path.dirname(templates_dir))
+                rel_path = template_path.split(templates_dir)[1]
+                write_dir =  os.path.dirname(os.path.join(generation_dir, base_name, rel_path))
+
+                print("WRITE DIR", write_dir)
+
+                if not os.path.exists(write_dir):
+                    os.makedirs(write_dir)
+
+                write_path = os.path.join(write_dir, final_name)
+
+            else:
+                write_path = os.path.join(generation_dir, final_name)
+
+            if os.path.exists(write_path):
+                raise ValueError("File already exists: " + write_path)
+
+            with open(write_path, "w") as f:
                 f.write(template)
 
             if verbose:
-                print(" " + system_path)
+                print(" " + write_path)
