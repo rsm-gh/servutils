@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
 #
+#   This file is part of JSEncoder.
+#
 # Copyright (c) 2022-2024 Rafael Senties Martinelli.
 #
 # Licensed under the Privative-Friendly Source-Shared License (PFSSL) v1.0.
@@ -33,7 +35,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from static_generator.ReduceData import ReduceData
+from static_generator.JSEncoder.ReduceData import ReduceData
 
 __FUNCTION_INDEX = 0  # some JS files my load other files, functions must not be overwritten
 __CONSTANT_INDEX = 0  # some JS files my load other files, functions must not be overwritten

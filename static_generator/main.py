@@ -32,7 +32,7 @@ from cssmin import cssmin
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from static_generator.reduce_js import reduce_js
+from static_generator.JSEncoder.main import reduce_js
 
 __version__ = "25.06.21.1"
 

@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
 #
+#   This file is part of JSEncoder.
+#
 # Copyright (c) 2022-2024 Rafael Senties Martinelli.
 #
 # Licensed under the Privative-Friendly Source-Shared License (PFSSL) v1.0.
