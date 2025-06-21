@@ -1,8 +1,15 @@
 #!/usr/bin/python3
 
 #
-#  Copyright (C) Rafael Senties Martinelli. All Rights Reserved.
+# Copyright (c) 2022-2024 Rafael Senties Martinelli.
 #
+# Licensed under the Privative-Friendly Source-Shared License (PFSSL) v1.0.
+# You may use, modify, and distribute this file under the terms of that license.
+#
+# This software is provided "as is", without warranty of any kind.
+# The authors are not liable for any damages arising from its use.
+#
+# See the LICENSE file for more details.
 
 """
     + THE CODE MUST NOT HAVE COMMENTS OR THE REDUCE WILL NOT PROPERLY WORK.
