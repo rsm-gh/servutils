@@ -122,19 +122,19 @@ header_js={header_js}""")
     #
     # Compressing the files
     #
-    compress_dict = __compress_files(static_dir=static_dir,
-                                     generation_dir=generation_dir,
-                                     map_dict=map_dict,
-                                     git_short_hash=git_short_hash,
-                                     integrity_key_removal=integrity_key_removal,
-                                     verbose=verbose,
-                                     minify=minify,
-                                     reduce=reduce,
-                                     versioning=versioning,
-                                     exclude_paths=exclude_paths,
-                                     header_js = header_js,
-                                     header_css = header_css,
-                                     inline = inline)
+    __compress_files(static_dir=static_dir,
+                     generation_dir=generation_dir,
+                     map_dict=map_dict,
+                     git_short_hash=git_short_hash,
+                     integrity_key_removal=integrity_key_removal,
+                     verbose=verbose,
+                     minify=minify,
+                     reduce=reduce,
+                     versioning=versioning,
+                     exclude_paths=exclude_paths,
+                     header_js = header_js,
+                     header_css = header_css,
+                     inline = inline)
 
 
     #
@@ -401,7 +401,7 @@ def __compress_files(static_dir: str,
                      exclude_paths: list[str],
                      header_js: str = "",
                      header_css: str = "",
-                     inline: bool = True) -> dict:
+                     inline: bool = True) -> None:
 
     if verbose:
         print("\n[GENERATING JS & CSS FILES]\n")
