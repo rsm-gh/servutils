@@ -6,7 +6,6 @@
 
 # Todo: Option to update (and load) the exported map from an existent file
 # Todo: Use md5 for the filenames ?
-# Todo: rename the module, static_generator.run
 # Todo: rename arg as encode_js
 # Todo: specify the files to replace (.html, .txt, etc..)
 
@@ -26,9 +25,9 @@ from cssmin import cssmin
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from compress.reduce_js import reduce_js
+from static_generator.reduce_js import reduce_js
 
-__version__ = "25.01.19.1"
+__version__ = "25.06.21.1"
 
 class CompressConstants:
     _file_extension = ".comp"
@@ -39,7 +38,7 @@ class CompressConstants:
     _static_path = "STATIC_PATH/" # the slash is important
     _reduce_public_js_except = "reducePublicJSExcept:"
 
-def compress_directory(static_dir: str,
+def run(static_dir: str,
                        templates_dir: str,
                        generation_dir: str,
                        map_file_name: None | str,

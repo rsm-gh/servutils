@@ -26,7 +26,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from compress.ReduceData import ReduceData
+from static_generator.ReduceData import ReduceData
 
 __FUNCTION_INDEX = 0  # some JS files my load other files, functions must not be overwritten
 __CONSTANT_INDEX = 0  # some JS files my load other files, functions must not be overwritten
