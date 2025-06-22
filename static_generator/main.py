@@ -100,7 +100,10 @@ header_js={header_js}""")
     if versioning not in (None, "md5", "git"):
         raise ValueError("Error: the only values that can be accepted for versioning are: None, 'md5' or 'git'.")
 
-    git_short_hash = __get_git_revision_short_hash()
+    if versioning == "git":
+        git_short_hash = __get_git_revision_short_hash()
+    else:
+        git_short_hash = None
 
     if exclude_paths is None:
         exclude_paths = []
@@ -590,7 +593,7 @@ def __add_already_minified_files(static_dir: str,
 
 def __update_static_files(templates_dir: str,
                           generation_dir: str,
-                          git_short_hash: str,
+                          git_short_hash: str | None,
                           exclude_paths: list[str],
                           verbose: bool,
                           map_dict: dict,
@@ -613,7 +616,9 @@ def __update_static_files(templates_dir: str,
             with open(template_path, "r") as f:
                 template = f.read()
 
-            template = template.replace("{{git_versioning}}", git_short_hash)
+            if git_short_hash is not None:
+                template = template.replace("{{git_versioning}}", git_short_hash)
+
             template = template.replace("<!DOCTYPE html>",
                                         "<!DOCTYPE html>\n\n<!-- File dynamically generated -->\n")
 
