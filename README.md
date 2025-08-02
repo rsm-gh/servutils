@@ -1,8 +1,5 @@
 
-This repository is a collection of server utilities, mainly used for [CAD-Viewer.org](https://cad-viewer.org/).
-A work is in progress to add as most content as possible.
-
-Each module can run independently, read the corresponding README.md if you want to use a module.
+This repository is a collection of server utilities, mainly used for [CAD-Viewer.org](https://cad-viewer.org/). Each module can run independently, read the corresponding README.md if you want to use a module.
 
 ## Installation
 
