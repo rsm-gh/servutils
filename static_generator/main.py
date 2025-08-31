@@ -642,8 +642,6 @@ def __update_static_files(templates_dir: str,
                 rel_path = template_path.split(templates_dir)[1]
                 write_dir =  os.path.dirname(os.path.join(generation_dir, base_name, rel_path))
 
-                print("WRITE DIR", write_dir)
-
                 if not os.path.exists(write_dir):
                     os.makedirs(write_dir)
 
